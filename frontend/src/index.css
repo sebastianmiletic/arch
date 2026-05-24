@@ -1,0 +1,108 @@
+@import "tailwindcss";
+
+@theme {
+  --color-*: initial;
+
+  /* Base colors that map to CSS variables */
+  --color-bg:              var(--color-bg, #08080a);
+  --color-bg-panel:        var(--color-bg-panel, #0f0f11);
+  --color-bg-surface:      var(--color-bg-surface, #151518);
+  --color-bg-hover:        var(--color-bg-hover, #1b1b1e);
+  --color-bg-active:       var(--color-bg-active, #222225);
+
+  --color-border:          var(--color-border, #1f1f23);
+  --color-border-strong:   var(--color-border-strong, #2a2a2e);
+
+  --color-text:            var(--color-text, #eaeaeb);
+  --color-text-heading:    var(--color-text-heading, #ffffff);
+  --color-text-secondary:  var(--color-text-secondary, #9e9ea3);
+  --color-text-muted:      var(--color-text-muted, #55555a);
+  --color-text-dim:        var(--color-text-dim, #333338);
+
+  --color-accent:          var(--color-accent, #ffffff);
+  --color-accent-dim:      var(--color-accent-dim, #b5b5ba);
+  --color-accent-bg:       var(--color-accent-bg, #1f1f23);
+
+  --color-success:         var(--color-success, #ffffff);
+  --color-warning:         var(--color-warning, #909095);
+  --color-danger:          var(--color-danger, #ff4444);
+  --color-danger-bg:       var(--color-danger-bg, rgba(255,68,68,0.08));
+
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--color-bg, #08080a);
+  color: var(--color-text, #eaeaeb);
+  -webkit-font-smoothing: antialiased;
+}
+
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border-strong, #2a2a2e);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-muted, #55555a);
+}
+
+@keyframes dot-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.2; }
+}
+.animate-dot {
+  animation: dot-pulse 2s infinite ease-in-out;
+}
+
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in-up {
+  animation: fade-in-up 0.3s ease-out forwards;
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.animate-shimmer {
+  background-size: 200% 100%;
+  animation: shimmer 2s linear infinite;
+}
+
+/* Syntax highlighting colors */
+.hljs { display: block; overflow-x: auto; padding: 1em; background: transparent; }
+.hljs-keyword, .hljs-selector-tag, .hljs-literal, .hljs-section, .hljs-link { color: var(--color-accent, #fff); font-weight: 600; }
+.hljs-string, .hljs-title, .hljs-name, .hljs-type, .hljs-attribute, .hljs-symbol, .hljs-bullet, .hljs-built_in, .hljs-addition, .hljs-template-tag, .hljs-template-variable { color: var(--color-success, #fff); }
+.hljs-comment, .hljs-quote, .hljs-deletion, .hljs-meta { color: var(--color-text-muted, #555); font-style: italic; }
+.hljs-number, .hljs-regexp, .hljs-variable, .hljs-template-variable, .hljs-tag .hljs-attr { color: var(--color-warning, #909095); }
+.hljs-function, .hljs-class .hljs-title, .hljs-title.class_ { color: var(--color-accent-dim, #b5b5ba); }
+.hljs-params { color: var(--color-text-secondary, #9e9ea3); }
+.hljs-property { color: var(--color-text, #eaeaeb); }
+.hljs-operator { color: var(--color-text-muted, #555); }
+.hljs-punctuation { color: var(--color-text-dim, #333); }
+
+/* macOS draggable area */
+.draggable {
+  -webkit-app-region: drag;
+}
+.no-drag {
+  -webkit-app-region: no-drag;
+}

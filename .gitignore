@@ -1,0 +1,50 @@
+# Old duplicate build dir
+server-dist/
+
+# Dependencies
+node_modules/
+frontend/node_modules/
+server/node_modules/
+
+# Build outputs
+frontend/dist/
+
+# Release / packaged apps
+release/
+
+# Electron
+*.asar
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# SQLite
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Test artifacts
+test-results/
+coverage/
+
+# Temp files
+tmp/
+temp/
+*.tmp
+
+# Screenshots (generated)
+screenshot-*.png
+*.png
+!frontend/src/assets/*.png
+!build/icon.icns

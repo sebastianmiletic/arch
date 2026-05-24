@@ -1,0 +1,22 @@
+import { randomUUID } from 'crypto';
+import type { Message, ProviderConfig, ChatSession, CodeChange, LoopState, LoopLog, LoopStage } from './types.js';
+export declare const db: any;
+export declare function getProviders(): ProviderConfig[];
+export declare function updateProvider(id: string, updates: Partial<ProviderConfig>): void;
+export declare function getSessions(): ChatSession[];
+export declare function createSession(session: Omit<ChatSession, 'messages'>): ChatSession;
+export declare function deleteSession(id: string): void;
+export declare function getMessages(sessionId: string): Message[];
+export declare function addMessage(msg: Message & {
+    sessionId: string;
+}): void;
+export declare function getCodeChanges(limit?: number): CodeChange[];
+export declare function addCodeChange(change: CodeChange): void;
+export declare function updateCodeChangeStatus(id: string, status: CodeChange['status']): void;
+export declare function getLatestLoopState(): LoopState | undefined;
+export declare function createLoopState(state: LoopState): void;
+export declare function updateLoopState(id: string, updates: Partial<LoopState>): void;
+export declare function getLoopLogs(stateId: string): LoopLog[];
+export declare function addLoopLog(stateId: string, log: LoopLog): void;
+export type { LoopStage };
+export { randomUUID };
