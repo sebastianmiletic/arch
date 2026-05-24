@@ -1,6 +1,6 @@
 import { lazy, Suspense } from 'react';
 import { useStore } from '../../stores/appStore';
-import { RotateCw, Layers, Search, Cpu, TestTube, Sparkles, Settings, Users, ShoppingBag, Terminal } from 'lucide-react';
+import { Search, Layers, Cpu, TestTube, Sparkles, Users, Terminal } from 'lucide-react';
 
 // Lazy-load all center-panel feature components
 const HomeScreen = lazy(() => import('../../features/HomeScreen'));
@@ -14,16 +14,13 @@ const SwarmPanel = lazy(() => import('../../features/SwarmPanel'));
 const ExtensionStore = lazy(() => import('../../features/ExtensionStore'));
 
 const iconMap: Record<string, any> = {
-  'rotate-cw': RotateCw,
-  search: Search,
-  layers: Layers,
-  cpu: Cpu,
+  'search': Search,
+  'layers': Layers,
+  'cpu': Cpu,
   'flask-conical': TestTube,
-  zap: Sparkles,
-  settings: Settings,
-  users: Users,
-  'shopping-bag': ShoppingBag,
-  terminal: Terminal,
+  'zap': Sparkles,
+  'users': Users,
+  'terminal': Terminal,
 };
 
 const componentMap: Record<string, any> = {
@@ -50,15 +47,18 @@ export default function CenterPanel() {
   const centerTab = useStore(s => s.centerTab);
   const setCenterTab = useStore(s => s.setCenterTab);
   const extensions = useStore(s => s.extensions);
-  const installed = extensions.filter(e => e.installed);
+
+  // Only show main working extensions in the tab bar — NOT Settings, Store, or stubs
+  const mainTabIds = ['home', 'search', 'swarm', 'models', 'skills', 'tests', 'arch'];
+  const tabs = extensions.filter(e => e.installed && mainTabIds.includes(e.id));
 
   const ActiveComponent = componentMap[centerTab] || null;
 
   return (
     <div className="flex-1 min-w-0 flex flex-col bg-bg">
       <div className="flex items-center h-9 px-2 gap-0.5 border-b border-border bg-bg-panel shrink-0 overflow-x-auto">
-        {installed.map(t => {
-          const Icon = iconMap[t.icon] || Settings;
+        {tabs.map(t => {
+          const Icon = iconMap[t.icon] || Terminal;
           return (
             <button
               key={t.id}

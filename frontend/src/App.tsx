@@ -3,64 +3,58 @@ import { useStore } from './stores/appStore';
 import LeftPanel from './components/left/LeftPanel';
 import CenterPanel from './components/center/CenterPanel';
 import RightPanel from './components/right/RightPanel';
+import { Settings, ShoppingBag } from 'lucide-react';
 
 function ArchLogo({ size = 28, color = '#a855f7' }: { size?: number; color?: string }) {
   const s = size;
-  const half = s / 2;
+  const cx = s / 2;
+  const cy = s / 2;
+  const w = s * 0.55;
+  const h = s * 0.55;
+
+  // Diamond corners (flat top/bottom, pointed left/right)
+  const diamond = [
+    [cx - w, cy],
+    [cx, cy - h],
+    [cx + w, cy],
+    [cx, cy + h],
+  ];
+
+  const d = `M ${diamond[0][0]} ${diamond[0][1]} L ${diamond[1][0]} ${diamond[1][1]} L ${diamond[2][0]} ${diamond[2][1]} L ${diamond[3][0]} ${diamond[3][1]} Z`;
+
   return (
-    <svg
-      width={s}
-      height={s}
-      viewBox={`0 0 ${s} ${s}`}
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <g transform={`translate(${half},${half}) rotate(45)`}>
-        {/* Bottom purple layer (base) */}
-        <rect
-          x={-half * 0.55}
-          y={-half * 0.15}
-          width={half * 1.1}
-          height={half * 1.1}
-          rx={half * 0.18}
-          fill={color}
-          opacity={0.9}
-        />
-        {/* Middle dark layer */}
-        <rect
-          x={-half * 0.55}
-          y={-half * 0.55}
-          width={half * 1.1}
-          height={half * 1.1}
-          rx={half * 0.18}
-          fill="#0a0a0f"
-          stroke={color}
-          strokeWidth={1.5}
-          opacity={0.95}
-        />
-        {/* Top stroke layer */}
-        <rect
-          x={-half * 0.55}
-          y={-half * 0.9}
-          width={half * 1.1}
-          height={half * 1.1}
-          rx={half * 0.18}
-          fill="none"
-          stroke={color}
-          strokeWidth={2}
-        />
-        {/* Inner accent */}
-        <rect
-          x={-half * 0.45}
-          y={-half * 0.8}
-          width={half * 0.9}
-          height={half * 0.9}
-          rx={half * 0.14}
-          fill="none"
-          stroke={color}
-          strokeWidth={0.8}
-          opacity={0.4}
-        />
-      </g>
+    <svg width={s} height={s} viewBox={`0 0 ${s} ${s}`} xmlns="http://www.w3.org/2000/svg">
+      {/* Bottom layer — offset down, filled with accent */}
+      <path
+        d={d}
+        fill={color}
+        opacity={0.35}
+        transform={`translate(0, ${s * 0.18})`}
+      />
+      {/* Middle layer — filled dark with accent stroke */}
+      <path
+        d={d}
+        fill="#0a0a0f"
+        stroke={color}
+        strokeWidth={1.2}
+        transform={`translate(0, ${s * 0.09})`}
+      />
+      {/* Top layer — stroke only */}
+      <path
+        d={d}
+        fill="none"
+        stroke={color}
+        strokeWidth={1.8}
+      />
+      {/* Inner accent ring */}
+      <path
+        d={d}
+        fill="none"
+        stroke={color}
+        strokeWidth={0.7}
+        opacity={0.4}
+        transform={`scale(0.75) translate(${cx * 0.33}, ${cy * 0.33})`}
+      />
     </svg>
   );
 }
@@ -68,6 +62,7 @@ function ArchLogo({ size = 28, color = '#a855f7' }: { size?: number; color?: str
 export default function App() {
   const theme = useStore(s => s.theme);
   const applyThemeToDOM = useStore(s => s.applyThemeToDOM);
+  const setCenterTab = useStore(s => s.setCenterTab);
 
   useEffect(() => {
     applyThemeToDOM(theme);
@@ -90,6 +85,20 @@ export default function App() {
             <span>Ready</span>
           </span>
           <span className="text-text-dim">|</span>
+          <button
+            onClick={() => setCenterTab('ExtensionStore')}
+            className="p-1.5 text-text-muted hover:text-accent hover:bg-accent-bg rounded-lg transition-colors"
+            title="Extension Store"
+          >
+            <ShoppingBag size={14} />
+          </button>
+          <button
+            onClick={() => setCenterTab('SettingsPanel')}
+            className="p-1.5 text-text-muted hover:text-accent hover:bg-accent-bg rounded-lg transition-colors"
+            title="Settings"
+          >
+            <Settings size={14} />
+          </button>
           <span className="text-text-dim">v1.0.0</span>
         </div>
       </header>

@@ -193,22 +193,19 @@ export const themes: Record<ThemeId, ThemeConfig> = {
 };
 
 const defaultExtensions: Extension[] = [
+  // CORE — always in main tab bar
   { id: 'home', name: 'Home', description: 'Project overview dashboard', category: 'core', installed: true, version: '1.0.0', author: 'Arch', icon: 'terminal', dependencies: [], component: 'HomeScreen' },
-  { id: 'search', name: 'Codebase Search', description: 'Search across all project files and content', category: 'core', installed: true, version: '1.0.0', author: 'Arch', icon: 'search', dependencies: [], component: 'CodebaseSearch' },
-  { id: 'arch', name: 'Architecture 2D', description: 'Detailed 2D dependency graph of the entire stack', category: 'visualization', installed: true, version: '1.0.0', author: 'Arch', icon: 'layers', dependencies: [], component: 'ArchitectureViz' },
-  { id: 'swarm', name: 'Swarm Engine', description: 'Multi-provider multi-model agent orchestration', category: 'agent', installed: true, version: '1.0.0', author: 'Arch', icon: 'users', dependencies: [], component: 'SwarmPanel' },
-  { id: 'models', name: 'Model Arena', description: 'Compare responses from multiple providers side-by-side', category: 'model', installed: true, version: '1.0.0', author: 'Arch', icon: 'cpu', dependencies: [], component: 'ModelComparison' },
-  { id: 'skills', name: 'Skills Registry', description: '15 toggleable capabilities from codegen to docker', category: 'tool', installed: true, version: '1.0.0', author: 'Arch', icon: 'zap', dependencies: [], component: 'SkillsPanel' },
-  { id: 'tests', name: 'Test Runner', description: 'Simulated test suite with pass/fail metrics and retry', category: 'tool', installed: true, version: '1.0.0', author: 'Arch', icon: 'flask-conical', dependencies: [], component: 'TestingDashboard' },
-  { id: 'settings', name: 'Settings', description: 'Themes, typography, layout, behavior', category: 'core', installed: true, version: '1.0.0', author: 'Arch', icon: 'settings', dependencies: [], component: 'SettingsPanel' },
+  { id: 'search', name: 'Search', description: 'Search across all project files and content', category: 'core', installed: true, version: '1.0.0', author: 'Arch', icon: 'search', dependencies: [], component: 'CodebaseSearch' },
+  // MAIN WORKING EXTENSIONS
+  { id: 'swarm', name: 'Swarm', description: 'Multi-provider multi-model agent orchestration', category: 'agent', installed: true, version: '1.0.0', author: 'Arch', icon: 'users', dependencies: [], component: 'SwarmPanel' },
+  { id: 'models', name: 'Models', description: 'Compare responses from multiple providers side-by-side', category: 'model', installed: true, version: '1.0.0', author: 'Arch', icon: 'cpu', dependencies: [], component: 'ModelComparison' },
+  { id: 'skills', name: 'Skills', description: '15 toggleable capabilities from codegen to docker', category: 'tool', installed: true, version: '1.0.0', author: 'Arch', icon: 'zap', dependencies: [], component: 'SkillsPanel' },
+  { id: 'tests', name: 'Tests', description: 'Simulated test suite with pass/fail metrics and retry', category: 'tool', installed: true, version: '1.0.0', author: 'Arch', icon: 'flask-conical', dependencies: [], component: 'TestingDashboard' },
+  { id: 'arch', name: 'Arch', description: '2D dependency graph of the entire stack', category: 'visualization', installed: true, version: '1.0.0', author: 'Arch', icon: 'layers', dependencies: [], component: 'ArchitectureViz' },
+  // AVAILABLE IN STORE
+  { id: 'github', name: 'GitHub', description: 'Browse repos, commits, and file trees', category: 'tool', installed: false, version: '1.0.0', author: 'Arch', icon: 'git-branch', dependencies: [], component: 'GitHubViewer' },
+  // Store itself is accessed via header icon
   { id: 'store', name: 'Extension Store', description: 'Marketplace for installing new extensions', category: 'core', installed: true, version: '1.0.0', author: 'Arch', icon: 'shopping-bag', dependencies: [], component: 'ExtensionStore' },
-  { id: 'diff', name: 'Diff Viewer', description: 'Side-by-side code diff with inline highlighting', category: 'tool', installed: false, version: '0.9.0', author: 'Arch', icon: 'git-compare', dependencies: [], component: '' },
-  { id: 'profiler', name: 'Code Profiler', description: 'Performance analysis and hot-path detection', category: 'tool', installed: false, version: '0.8.0', author: 'Arch', icon: 'bar-chart', dependencies: [], component: '' },
-  { id: 'debugger', name: 'AI Debugger', description: 'Interactive step-through debugging with AI explanations', category: 'agent', installed: false, version: '0.7.0', author: 'Arch', icon: 'bug', dependencies: [], component: '' },
-  { id: 'diagrams', name: 'Diagram Generator', description: 'Mermaid/PlantUML diagram generation from code', category: 'visualization', installed: false, version: '0.6.0', author: 'Arch', icon: 'git-branch', dependencies: [], component: '' },
-  { id: 'security', name: 'Security Scanner', description: 'Vulnerability detection in dependencies and code', category: 'tool', installed: false, version: '0.5.0', author: 'Arch', icon: 'shield', dependencies: [], component: '' },
-  { id: 'docs', name: 'Doc Generator', description: 'Auto-generate API docs and README from code', category: 'tool', installed: false, version: '0.5.0', author: 'Arch', icon: 'book-open', dependencies: [], component: '' },
-  { id: 'translator', name: 'Code Translator', description: 'Translate between programming languages', category: 'model', installed: false, version: '0.4.0', author: 'Arch', icon: 'languages', dependencies: [], component: '' },
 ];
 
 const defaultSwarmAgents: SwarmAgent[] = [
