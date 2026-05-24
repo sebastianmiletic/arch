@@ -18,9 +18,10 @@ ipcMain.handle('select-project', async () => {
   return result;
 });
 
-// Force single instance: if Arch is already running, kill the old one and open fresh
+// Force single instance: second launch focuses the existing window
 const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
+  console.log('Arch is already running. Focusing existing window...');
   app.quit();
   process.exit(0);
 }
@@ -30,9 +31,9 @@ let backend;
 
 const isDev = !app.isPackaged;
 
-// Logging to user data dir for debugging packaged app issues
+// Logging
 const logDir = path.join(app.getPath('userData'), 'logs');
-if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true });
+try { if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true }); } catch {}
 const logFile = path.join(logDir, `main-${Date.now()}.log`);
 function log(msg) {
   const line = `[${new Date().toISOString()}] ${msg}\n`;
@@ -40,73 +41,103 @@ function log(msg) {
   if (isDev) console.log(line.trim());
 }
 
-// When a second instance is launched (e.g. from Spotlight), focus the existing window
+// Second instance launched (e.g. from Spotlight) — focus or recreate window
 app.on('second-instance', (_event, _argv, _workingDirectory) => {
-  log('second-instance event fired — bringing window to front');
-  if (win) {
+  log('second-instance event fired');
+  if (win && !win.isDestroyed()) {
     if (win.isMinimized()) win.restore();
     win.show();
     win.focus();
+    log('Focused existing window');
+  } else {
+    log('No existing window — recreating');
+    createWindow();
   }
 });
 
 function getServerDir() {
-  if (isDev) {
-    return path.join(__dirname, 'server');
-  }
+  if (isDev) return path.join(__dirname, 'server');
   // In packaged app, extraResources are in Contents/Resources
+  // For asar: false, they're in app.asar.unpacked if asar: true, but we prefer asar: false
   return path.join(process.resourcesPath, 'server');
 }
 
 function waitForBackend(cb, retries = 60) {
-  log(`waitForBackend: ${retries} retries left`);
   const req = http.get('http://localhost:3000/api/health', { timeout: 500 }, (res) => {
-    if (res.statusCode === 200) {
-      log('Backend health check passed');
-      return cb();
-    }
+    if (res.statusCode === 200) return cb();
     if (retries > 0) setTimeout(() => waitForBackend(cb, retries - 1), 500);
-    else {
-      log('Backend health check failed: out of retries');
-      cb(new Error('Backend failed to start'));
-    }
+    else cb(new Error('Backend failed to start'));
   });
-  req.on('error', (err) => {
-    log(`Health check error: ${err.message || 'unknown'}`);
+  req.on('error', () => {
     if (retries > 0) setTimeout(() => waitForBackend(cb, retries - 1), 500);
-    else {
-      log('Backend health check failed: out of retries');
-      cb(new Error('Backend failed to start'));
-    }
+    else cb(new Error('Backend failed to start'));
   });
   req.setTimeout(500);
 }
 
-app.whenReady().then(async () => {
-  log('App ready');
+function getSafeWindowBounds() {
+  const primaryDisplay = screen.getPrimaryDisplay();
+  const { width: screenW, height: screenH } = primaryDisplay.workAreaSize;
+  const winW = 1440;
+  const winH = 900;
+  const x = Math.max(0, Math.min(100, screenW - winW));
+  const y = Math.max(0, Math.min(100, screenH - winH));
+  return { x, y, width: winW, height: winH };
+}
+
+function createWindow() {
+  const bounds = getSafeWindowBounds();
+  log(`Creating window at ${JSON.stringify(bounds)}`);
+  
+  win = new BrowserWindow({
+    ...bounds,
+    titleBarStyle: 'hiddenInset',
+    backgroundColor: '#08080a',
+    show: true,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, 'electron', 'preload.js'),
+    },
+  });
+
+  win.on('ready-to-show', () => {
+    win.show();
+    win.focus();
+  });
+
+  win.on('closed', () => {
+    win = null;
+  });
+
+  if (isDev) win.webContents.openDevTools();
+
+  log('Loading http://localhost:3000');
+  win.loadURL('http://localhost:3000').then(() => {
+    log('URL loaded successfully');
+  }).catch((err) => {
+    log(`Failed to load URL: ${err.message}`);
+  });
+}
+
+function startBackend() {
   const serverDir = getServerDir();
   const serverDist = path.join(serverDir, 'dist', 'server.js');
-  log(`Server dir: ${serverDir}`);
-  log(`Server dist: ${serverDist}`);
-  log(`__dirname: ${__dirname}`);
-  log(`resourcesPath: ${process.resourcesPath}`);
-
-  if (!isDev) {
-    const nmPath = path.join(serverDir, 'node_modules');
-    if (!fs.existsSync(nmPath)) {
-      log('Server node_modules missing');
-    } else {
-      log('Server node_modules found');
-    }
-  }
-
+  
   if (!fs.existsSync(serverDist)) {
     log(`FATAL: Server build not found at ${serverDist}`);
     app.quit();
     return;
   }
+  
+  // Check if node_modules exist. If not, fallback to copying from source
+  const serverNM = path.join(serverDir, 'node_modules');
+  const sourceNM = path.join(__dirname, '..', '..', 'server', 'node_modules'); // Relative to app in dev
+  
+  log(`serverDir: ${serverDir}`);
+  log(`serverDist: ${serverDist}`);
+  log(`node_modules at serverDir: ${fs.existsSync(serverNM)}`);
 
-  // Use userData for DB so it's writable even in /Applications
   const dbDir = app.getPath('userData');
   log(`DB dir: ${dbDir}`);
 
@@ -116,63 +147,33 @@ app.whenReady().then(async () => {
     env: { ...process.env, DB_PATH: path.join(dbDir, 'studio.db') },
   });
 
-  backend.on('error', (err) => {
-    log(`Backend spawn error: ${err.message}`);
-  });
+  backend.on('error', (err) => log(`Backend spawn error: ${err.message}`));
+  backend.on('exit', (code) => log(`Backend exited with code ${code}`));
+}
 
-  backend.on('exit', (code) => {
-    log(`Backend exited with code ${code}`);
-  });
+app.whenReady().then(() => {
+  log('App ready');
+  log(`__dirname: ${__dirname}`);
+  log(`resourcesPath: ${process.resourcesPath}`);
+
+  startBackend();
 
   log('Waiting for backend...');
   waitForBackend((err) => {
     if (err) {
       log(`Backend failed: ${err.message}`);
+    } else {
+      log('Backend health check passed');
     }
-
-    log('Creating BrowserWindow...');
-    win = new BrowserWindow({
-      width: 1440,
-      height: 900,
-      titleBarStyle: 'hiddenInset',
-      backgroundColor: '#08080a',
-      show: true,
-      webPreferences: {
-        nodeIntegration: false,
-        contextIsolation: true,
-        preload: path.join(__dirname, 'electron', 'preload.js'),
-      },
-    });
-
-    win.on('ready-to-show', () => {
-      log('Window ready-to-show');
-      win.show();
-      win.focus();
-    });
-
-    win.on('closed', () => {
-      log('Window closed');
-      win = null;
-    });
-
-    if (isDev) win.webContents.openDevTools();
-
-    log('Loading http://localhost:3000');
-    win.loadURL('http://localhost:3000').then(() => {
-      log('URL loaded successfully');
-    }).catch((err) => {
-      log(`Failed to load URL: ${err.message}`);
-    });
+    createWindow();
   });
 });
 
 app.on('window-all-closed', () => {
-  log('window-all-closed');
   if (backend) backend.kill();
   app.quit();
 });
 
 app.on('before-quit', () => {
-  log('before-quit');
   if (backend) backend.kill();
 });
