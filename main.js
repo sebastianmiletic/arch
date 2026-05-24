@@ -8,6 +8,13 @@ const fs = require('fs');
 app.commandLine.appendSwitch('disable-gpu-sandbox');
 app.commandLine.appendSwitch('disable-software-rasterizer');
 
+// Force single instance: if Arch is already running, kill the old one and open fresh
+const gotTheLock = app.requestSingleInstanceLock();
+if (!gotTheLock) {
+  app.quit();
+  process.exit(0);
+}
+
 let win;
 let backend;
 
@@ -22,6 +29,16 @@ function log(msg) {
   try { fs.appendFileSync(logFile, line); } catch {}
   if (isDev) console.log(line.trim());
 }
+
+// When a second instance is launched (e.g. from Spotlight), focus the existing window
+app.on('second-instance', (_event, _argv, _workingDirectory) => {
+  log('second-instance event fired — bringing window to front');
+  if (win) {
+    if (win.isMinimized()) win.restore();
+    win.show();
+    win.focus();
+  }
+});
 
 function getServerDir() {
   if (isDev) {
