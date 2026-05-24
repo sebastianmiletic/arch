@@ -6,7 +6,7 @@ directories:
   buildResources: "build"
 files:
   - "main.js"
-  - "electron/**/*"
+  - "electron/preload.js"
 extraResources:
   - from: "server"
     to: "server"

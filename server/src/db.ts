@@ -1,11 +1,17 @@
 import BetterSqlite3 from 'better-sqlite3';
 import { randomUUID } from 'crypto';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+// In production (packaged app), use DB_PATH env var for writable location
+const dbFile = process.env.DB_PATH || 'studio.db';
+
 import type {
   Message, ProviderConfig, ChatSession, CodeChange,
   LoopState, LoopLog, LoopStage, Feature, TestResult, ErrorReport, VerifyResult, AgentAction,
 } from './types.js';
 
-export const db = new BetterSqlite3('studio.db') as any;
+export const db = new BetterSqlite3(dbFile) as any;
 
 function initTables() {
   db.exec(`

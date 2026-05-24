@@ -1,6 +1,8 @@
 import BetterSqlite3 from 'better-sqlite3';
 import { randomUUID } from 'crypto';
-export const db = new BetterSqlite3('studio.db');
+// In production (packaged app), use DB_PATH env var for writable location
+const dbFile = process.env.DB_PATH || 'studio.db';
+export const db = new BetterSqlite3(dbFile);
 function initTables() {
     db.exec(`
     CREATE TABLE IF NOT EXISTS providers (
