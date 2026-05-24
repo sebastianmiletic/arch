@@ -4,6 +4,10 @@ const { spawn } = require('child_process');
 const http = require('http');
 const fs = require('fs');
 
+// Fix GPU sandbox crash on unsigned macOS apps
+app.commandLine.appendSwitch('disable-gpu-sandbox');
+app.commandLine.appendSwitch('disable-software-rasterizer');
+
 let win;
 let backend;
 
@@ -15,7 +19,7 @@ if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true });
 const logFile = path.join(logDir, `main-${Date.now()}.log`);
 function log(msg) {
   const line = `[${new Date().toISOString()}] ${msg}\n`;
-  fs.appendFileSync(logFile, line);
+  try { fs.appendFileSync(logFile, line); } catch {}
   if (isDev) console.log(line.trim());
 }
 
@@ -27,28 +31,28 @@ function getServerDir() {
   return path.join(process.resourcesPath, 'server');
 }
 
-function waitForBackend(cb, retries = 40) {
+function waitForBackend(cb, retries = 60) {
   log(`waitForBackend: ${retries} retries left`);
-  const req = http.get('http://localhost:3000/api/health', { timeout: 400 }, (res) => {
+  const req = http.get('http://localhost:3000/api/health', { timeout: 500 }, (res) => {
     if (res.statusCode === 200) {
       log('Backend health check passed');
       return cb();
     }
-    if (retries > 0) setTimeout(() => waitForBackend(cb, retries - 1), 400);
+    if (retries > 0) setTimeout(() => waitForBackend(cb, retries - 1), 500);
     else {
       log('Backend health check failed: out of retries');
       cb(new Error('Backend failed to start'));
     }
   });
   req.on('error', (err) => {
-    log(`Health check error: ${err.message}`);
-    if (retries > 0) setTimeout(() => waitForBackend(cb, retries - 1), 400);
+    log(`Health check error: ${err.message || 'unknown'}`);
+    if (retries > 0) setTimeout(() => waitForBackend(cb, retries - 1), 500);
     else {
       log('Backend health check failed: out of retries');
       cb(new Error('Backend failed to start'));
     }
   });
-  req.setTimeout(400);
+  req.setTimeout(500);
 }
 
 app.whenReady().then(async () => {
@@ -60,11 +64,10 @@ app.whenReady().then(async () => {
   log(`__dirname: ${__dirname}`);
   log(`resourcesPath: ${process.resourcesPath}`);
 
-  // Ensure dependencies are installed in production
   if (!isDev) {
     const nmPath = path.join(serverDir, 'node_modules');
     if (!fs.existsSync(nmPath)) {
-      log('Server node_modules missing — backend will likely fail');
+      log('Server node_modules missing');
     } else {
       log('Server node_modules found');
     }
@@ -98,7 +101,6 @@ app.whenReady().then(async () => {
   waitForBackend((err) => {
     if (err) {
       log(`Backend failed: ${err.message}`);
-      // Show window anyway so user can see error in dev tools
     }
 
     log('Creating BrowserWindow...');
