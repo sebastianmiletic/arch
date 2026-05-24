@@ -120,7 +120,7 @@ export interface AgentAction {
   details?: string;
 }
 
-export type ThemeId = 'orion' | 'midnight' | 'solar' | 'forest' | 'ocean' | 'cyber';
+export type ThemeId = 'orion' | 'midnight' | 'solar' | 'forest' | 'ocean' | 'cyber' | 'custom';
 
 export interface ThemeConfig {
   id: ThemeId;

@@ -167,6 +167,29 @@ export const themes: Record<ThemeId, ThemeConfig> = {
     danger: '#fda4af',
     dangerBg: 'rgba(253,164,175,0.08)',
   },
+  custom: {
+    id: 'custom',
+    name: 'Custom',
+    bg: '#08080a',
+    bgPanel: '#0f0f11',
+    bgSurface: '#151518',
+    bgHover: '#1b1b1e',
+    bgActive: '#222225',
+    border: '#1f1f23',
+    borderStrong: '#2a2a2e',
+    text: '#eaeaeb',
+    textHeading: '#ffffff',
+    textSecondary: '#9e9ea3',
+    textMuted: '#55555a',
+    textDim: '#333338',
+    accent: '#a855f7',
+    accentDim: '#7c3aed',
+    accentBg: 'rgba(168,85,247,0.12)',
+    success: '#22c55e',
+    warning: '#eab308',
+    danger: '#ef4444',
+    dangerBg: 'rgba(239,68,68,0.08)',
+  },
 };
 
 const defaultExtensions: Extension[] = [
@@ -261,12 +284,14 @@ export interface AppStore {
   setRightTab: (t: string) => void;
   projectRoot: string | null;
   setProjectRoot: (r: string | null) => void;
+  customTheme: ThemeConfig;
+  setCustomTheme: (t: Partial<ThemeConfig>) => void;
 }
 
 export const useStore = create<AppStore>((set, get) => ({
   theme: themes.orion,
   setTheme: (id) => {
-    const t = themes[id];
+    const t = id === 'custom' ? get().customTheme : themes[id];
     set({ theme: t });
     get().applyThemeToDOM(t);
   },
@@ -355,4 +380,13 @@ export const useStore = create<AppStore>((set, get) => ({
   setRightTab: (rightTab) => set({ rightTab }),
   projectRoot: null,
   setProjectRoot: (projectRoot) => set({ projectRoot }),
+  customTheme: themes.custom,
+  setCustomTheme: (updates) => set((state) => {
+    const next = { ...state.customTheme, ...updates };
+    if (state.settings.theme === 'custom') {
+      state.applyThemeToDOM(next);
+      return { customTheme: next, theme: next };
+    }
+    return { customTheme: next };
+  }),
 }));

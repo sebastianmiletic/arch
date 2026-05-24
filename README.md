@@ -1,28 +1,25 @@
 # Arch Code Studio
 
-A professional, native macOS application for AI-assisted software development. Built with Electron, React 19, TypeScript, and Express — packaged as a standalone `.app` that you can launch from Spotlight.
+<p align="center">
+  <img src="build/logo.png" width="120" alt="Arch Code Studio Logo" />
+</p>
 
-![Arch Code Studio](frontend/src/assets/hero.png)
+A professional, native macOS application for AI-assisted software development. Built with Electron, React 19, TypeScript, and Express — packaged as a standalone `.app` that you can launch from Spotlight.
 
 ## Overview
 
 Arch Code Studio is a modular AI development environment that brings together:
 
+- **Home Dashboard** — Project overview with directory picker, file stats, language breakdown, and recent projects
 - **Extension Store** — Install/uninstall capabilities like a real app marketplace
 - **Swarm Engine** — Dispatch a single prompt to multiple AI models simultaneously, each with a specialized role
 - **2D Architecture Visualizer** — Explore your codebase as a layered dependency graph
-- **Autonomous Loop** — 8-stage iterative development cycle (analyze → plan → build → test → debug → improve → verify → commit)
 - **Model Arena** — Compare responses from multiple providers side-by-side
 - **Codebase Search** — Search filenames and contents across your entire project
 - **Skills Registry** — 15 toggleable capabilities from code generation to Docker
 - **Test Runner** — Simulated test suite with pass/fail metrics and retry
-
-## Architecture
-
-- **Frontend**: React 19 + Vite + Tailwind v4 + Framer Motion + Zustand
-- **Backend**: Express 5 + better-sqlite3 + WebSocket server
-- **Packaging**: Electron Builder → standalone `.app` with embedded backend
-- **macOS**: Traffic-light-safe header (`hiddenInset`), draggable regions, 6 theme schemes
+- **GitHub Viewer** — Browse repos, commits, file trees, and READMEs
+- **Custom Themes** — 6 built-in presets plus a full custom theme editor with JSON import/export
 
 ## Installation
 
@@ -40,7 +37,7 @@ Arch Code Studio is a modular AI development environment that brings together:
 
 - macOS (arm64 or x64)
 - Node.js 20+
-- npm or yarn
+- npm
 
 #### Steps
 
@@ -64,7 +61,7 @@ npm run build
 # 6. Package as .app
 npx electron-builder --mac --arm64
 
-# 7. (Optional) Copy server node_modules into bundle for offline use
+# 7. Copy server node_modules into bundle (required for backend to start)
 cp -R server/node_modules release/mac-arm64/Arch.app/Contents/Resources/server/
 
 # 8. Ad-hoc sign the app
@@ -85,12 +82,20 @@ When you open Arch, the app:
 
 The first launch may take 5–10 seconds while the backend initializes the SQLite database.
 
+### Home Dashboard
+
+The Home tab is your landing screen:
+- **Open a Project** — Click the directory picker to select any folder on your Mac
+- **Project Stats** — Once opened, see file count, line count, language breakdown, git commits, and last modified date
+- **Recent Projects** — Previously opened projects are saved and clickable
+- **Quick Start** — Jump to Search, Settings, Swarm, or Store
+
 ### Main Panels
 
 | Panel | Description |
 |-------|-------------|
 | **Left** | File tree, change feed, action log |
-| **Center** | Dynamic workspace tabs — Loop, Search, Arch Viz, Swarm, Models, Skills, Tests, Settings, Store |
+| **Center** | Dynamic workspace tabs — Home, Search, Arch Viz, Swarm, Models, Skills, Tests, Settings, Store |
 | **Right** | Chat console + provider settings |
 
 ### Swarm Engine
@@ -112,13 +117,22 @@ The first launch may take 5–10 seconds while the backend initializes the SQLit
 
 ### Themes
 
-6 color schemes available in **Settings**:
+6 built-in color schemes + 1 fully customizable preset:
+
 - **Orion** — Monochrome dark (default)
 - **Midnight** — Deep blue accent
 - **Solar** — Warm light
 - **Forest** — Green accent
 - **Ocean** — Cyan accent
 - **Cyber** — Purple/pink neon
+- **Custom** — Build your own with 6 color pickers + JSON import/export
+
+To create a custom theme:
+1. Go to **Settings** → **Theme**
+2. Select the **Custom** preset
+3. Use the color pickers to adjust Background, Surface, Text, Accent, Border, and Danger
+4. Or paste a full JSON theme object and click **Apply JSON**
+5. Export your creation with the **Export JSON** button
 
 ## Project Structure
 
@@ -126,16 +140,18 @@ The first launch may take 5–10 seconds while the backend initializes the SQLit
 arch/
 ├── main.js                 # Electron main process (spawns backend)
 ├── electron/
-│   ├── main.js             # Dev entry point
-│   └── preload.js          # Context bridge
+│   └── preload.js          # Context bridge (select-project IPC)
 ├── electron-builder.yml    # Packaging configuration
+├── build/
+│   ├── logo.svg            # App logo (purple diamond layers)
+│   └── icon.icns           # macOS dock icon
 ├── frontend/
 │   ├── src/
-│   │   ├── App.tsx         # Root layout
+│   │   ├── App.tsx         # Root layout with themed logo
 │   │   ├── main.tsx        # React entry
 │   │   ├── index.css       # Theme CSS variables
 │   │   ├── stores/
-│   │   │   └── appStore.ts # Zustand global state
+│   │   │   └── appStore.ts # Zustand global state (themes, extensions, agents)
 │   │   ├── types/
 │   │   │   └── index.ts    # Shared TypeScript types
 │   │   ├── components/
@@ -145,17 +161,18 @@ arch/
 │   │   │   │   └── LeftPanel.tsx
 │   │   │   └── right/
 │   │   │       ├── RightPanel.tsx
-│   │   │       ├── ChatPanel.tsx
-│   │   │       └── ProviderSettings.tsx
+│   │   │       └── ChatPanel.tsx
 │   │   ├── features/
+│   │   │   ├── HomeScreen.tsx       # Project dashboard
 │   │   │   ├── SwarmPanel.tsx       # Multi-model orchestration
 │   │   │   ├── ArchitectureViz.tsx  # 2D dependency graph
 │   │   │   ├── ExtensionStore.tsx   # Marketplace
+│   │   │   ├── SettingsPanel.tsx    # Theme editor + custom presets
+│   │   │   ├── GitHubViewer.tsx     # Repo browser
 │   │   │   ├── CodebaseSearch.tsx
 │   │   │   ├── ModelComparison.tsx
 │   │   │   ├── TestingDashboard.tsx
-│   │   │   ├── SkillsPanel.tsx
-│   │   │   └── SettingsPanel.tsx
+│   │   │   └── SkillsPanel.tsx
 │   │   └── services/
 │   │       ├── api.ts      # REST API client
 │   │       └── ws.ts       # WebSocket client
@@ -163,19 +180,16 @@ arch/
 ├── server/
 │   ├── src/
 │   │   ├── server.ts       # Express entry
-│   │   ├── routes.ts       # REST API routes (incl. /api/swarm)
+│   │   ├── routes.ts       # REST API routes (incl. /api/swarm, /api/project-stats)
 │   │   ├── providers.ts    # LLM provider integrations
 │   │   ├── db.ts           # SQLite schema + queries
 │   │   ├── ws.ts           # WebSocket server
 │   │   ├── features.ts     # Feature seeding
-│   │   ├── fs-utils.ts     # File tree scanner
-│   │   ├── loop.ts         # Autonomous loop logic
+│   │   ├── fs-utils.ts     # File tree scanner + project stats
 │   │   └── types.ts        # Backend types
 │   ├── dist/               # Compiled JavaScript
 │   ├── public/             # Frontend production build
 │   └── package.json
-├── build/
-│   └── icon.icns           # macOS app icon
 └── AGENTS.md               # Agent context for AI assistants
 ```
 
@@ -224,7 +238,7 @@ cd frontend
 npm run dev        # vite dev server on :5173
 
 # Terminal 3 — start Electron shell
-npm run dev        # electron . with NODE_ENV=development
+npx electron .     # from project root
 ```
 
 ### Build for Production
@@ -237,6 +251,10 @@ npm run build      # builds frontend + compiles server TypeScript
 
 ```bash
 npx electron-builder --mac --arm64
+# Then copy node_modules manually:
+cp -R server/node_modules release/mac-arm64/Arch.app/Contents/Resources/server/
+codesign --force --deep --sign - release/mac-arm64/Arch.app
+cp -R release/mac-arm64/Arch.app /Applications/
 ```
 
 ## Troubleshooting
