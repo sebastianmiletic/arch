@@ -18,8 +18,8 @@ export default function App() {
       {/* macOS traffic light safe area + header */}
       <header className="h-11 flex items-center pl-20 pr-4 border-b border-border shrink-0 bg-bg-panel draggable">
         <div className="flex items-center gap-2.5">
-          <div className="w-5 h-5 rounded bg-text flex items-center justify-center">
-            <Terminal size={12} className="text-bg" />
+          <div className="w-7 h-7 rounded-lg border border-border flex items-center justify-center" style={{ background: theme.accentBg }}>
+            <Terminal size={16} style={{ color: theme.accent }} />
           </div>
           <div className="flex flex-col leading-none">
             <span className="font-bold text-[13px] text-text-heading tracking-tight">Arch</span>

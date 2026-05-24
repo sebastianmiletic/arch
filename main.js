@@ -1,4 +1,4 @@
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, screen, dialog, ipcMain } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
 const http = require('http');
@@ -7,6 +7,16 @@ const fs = require('fs');
 // Fix GPU sandbox crash on unsigned macOS apps
 app.commandLine.appendSwitch('disable-gpu-sandbox');
 app.commandLine.appendSwitch('disable-software-rasterizer');
+
+// IPC: project directory selector
+ipcMain.handle('select-project', async () => {
+  if (!win) return { canceled: true };
+  const result = await dialog.showOpenDialog(win, {
+    properties: ['openDirectory'],
+    title: 'Select Project Directory',
+  });
+  return result;
+});
 
 // Force single instance: if Arch is already running, kill the old one and open fresh
 const gotTheLock = app.requestSingleInstanceLock();

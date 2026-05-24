@@ -1,0 +1,25 @@
+#!/bin/zsh
+# Arch launcher script - add this to your .zshrc or run directly
+# Usage: arch [project-path]
+
+arch() {
+  local project_path="${1:-$(pwd)}"
+  
+  # Check if Arch.app exists
+  if [[ ! -d "/Applications/Arch.app" ]]; then
+    echo "Arch.app not found in /Applications"
+    echo "Install it first: cp -R release/mac-arm64/Arch.app /Applications/"
+    return 1
+  fi
+  
+  # Open the app
+  open /Applications/Arch.app
+  
+  echo "Arch Code Studio launching..."
+  echo "Project: $project_path"
+}
+
+# If run directly (not sourced), launch Arch
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]] || [[ "${(%):-%N}" == "$0" ]]; then
+  arch "$@"
+fi

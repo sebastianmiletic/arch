@@ -170,7 +170,7 @@ export const themes: Record<ThemeId, ThemeConfig> = {
 };
 
 const defaultExtensions: Extension[] = [
-  { id: 'loop', name: 'Autonomous Loop', description: '8-stage iterative development cycle', category: 'core', installed: true, version: '1.0.0', author: 'Arch', icon: 'rotate-cw', dependencies: [], component: 'LoopView' },
+  { id: 'home', name: 'Home', description: 'Project overview dashboard', category: 'core', installed: true, version: '1.0.0', author: 'Arch', icon: 'terminal', dependencies: [], component: 'HomeScreen' },
   { id: 'search', name: 'Codebase Search', description: 'Search across all project files and content', category: 'core', installed: true, version: '1.0.0', author: 'Arch', icon: 'search', dependencies: [], component: 'CodebaseSearch' },
   { id: 'arch', name: 'Architecture 2D', description: 'Detailed 2D dependency graph of the entire stack', category: 'visualization', installed: true, version: '1.0.0', author: 'Arch', icon: 'layers', dependencies: [], component: 'ArchitectureViz' },
   { id: 'swarm', name: 'Swarm Engine', description: 'Multi-provider multi-model agent orchestration', category: 'agent', installed: true, version: '1.0.0', author: 'Arch', icon: 'users', dependencies: [], component: 'SwarmPanel' },
@@ -259,6 +259,8 @@ export interface AppStore {
   setLeftTab: (t: string) => void;
   rightTab: string;
   setRightTab: (t: string) => void;
+  projectRoot: string | null;
+  setProjectRoot: (r: string | null) => void;
 }
 
 export const useStore = create<AppStore>((set, get) => ({
@@ -345,10 +347,12 @@ export const useStore = create<AppStore>((set, get) => ({
   toggleSkill: (id) => set((state) => ({
     skills: state.skills.map(s => s.id === id ? { ...s, enabled: !s.enabled } : s),
   })),
-  centerTab: 'LoopView',
+  centerTab: 'HomeScreen',
   setCenterTab: (centerTab) => set({ centerTab }),
   leftTab: 'files',
   setLeftTab: (leftTab) => set({ leftTab }),
   rightTab: 'chat',
   setRightTab: (rightTab) => set({ rightTab }),
+  projectRoot: null,
+  setProjectRoot: (projectRoot) => set({ projectRoot }),
 }));

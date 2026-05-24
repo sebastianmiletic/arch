@@ -68,6 +68,10 @@ export const errorsApi = {
   }),
 };
 
+export const projectApi = {
+  stats: (root: string) => api<any>(`/project-stats?root=${encodeURIComponent(root)}`),
+};
+
 export const filesApi = {
   tree: (root?: string) => api<any>(`/files?root=${encodeURIComponent(root || '')}`),
 };

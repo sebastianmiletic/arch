@@ -240,10 +240,17 @@ router.post('/verify', (req: Request, res: Response) => {
 });
 
 // ========== File Tree ==========
-import { getFileTree } from './fs-utils.js';
+import { getFileTree, getProjectStats } from './fs-utils.js';
 router.get('/files', (req: Request, res: Response) => {
   const root = typeof req.query.root === 'string' ? req.query.root : process.cwd();
   res.json(getFileTree(root));
+});
+
+// ========== Project Stats ==========
+router.get('/project-stats', (req, res) => {
+  const root = typeof req.query.root === 'string' ? req.query.root : process.cwd();
+  try { res.json(getProjectStats(root)); }
+  catch (err) { res.status(500).json({ error: (err as Error).message }); }
 });
 
 // ========== Health ==========
