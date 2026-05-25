@@ -31,7 +31,7 @@ export const sessionsApi = {
 };
 
 export const chatApi = {
-  send: (data: { sessionId: string; content: string; providerId: string }) =>
+  send: (data: { sessionId: string; content: string; providerId: string; projectRoot?: string | null }) =>
     api<any>('/chat', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data),
     }),

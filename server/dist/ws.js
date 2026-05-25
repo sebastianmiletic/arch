@@ -2,6 +2,7 @@ import { WebSocketServer } from 'ws';
 import { randomUUID } from 'crypto';
 import { AutonomousLoop } from './loop.js';
 import { addCodeChange } from './db.js';
+import { setBroadcast } from './ws-shared.js';
 import { createTerminalSession, getTerminalSession, killTerminalSession, resizeTerminalSession, writeToTerminal, } from './terminal.js';
 export function createWSServer(startPort = 3001) {
     let port = startPort;
@@ -36,6 +37,7 @@ export function createWSServer(startPort = 3001) {
                 client.send(json);
         }
     }
+    setBroadcast(broadcast);
     wss.on('connection', (ws) => {
         const clientId = randomUUID();
         clientIdMap.set(ws, clientId);

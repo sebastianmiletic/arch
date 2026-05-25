@@ -6,8 +6,9 @@ import {
   getLatestLoopState, createLoopState, updateLoopState,
   getLoopLogs, addLoopLog,
 } from './db.js';
-import { chatWithProvider, testProvider, listOllamaModels, sendSingleMessage } from './providers.js';
+import { testProvider, listOllamaModels, sendSingleMessage } from './providers.js';
 import { getFeatures, updateFeature, seedFeatures } from './features.js';
+import { runAgentChat } from './agent.js';
 import type { ProviderConfig, Message, LoopState, LoopLog } from './types.js';
 import { db } from './db.js';
 
@@ -81,89 +82,19 @@ router.get('/sessions/:id/messages', (req: Request, res: Response) => {
 });
 
 router.post('/chat', async (req: Request, res: Response) => {
-  const { sessionId, content, providerId } = req.body as { sessionId: string; content: string; providerId: string };
+  const { sessionId, content, providerId, projectRoot } = req.body;
   const providers = getProviders();
-  const rawProvider = providers.find(p => p.id === providerId) || providers.find(p => p.enabled);
+  const rawProvider = providers.find((p: ProviderConfig) => p.id === providerId) || providers.find((p: ProviderConfig) => p.enabled);
 
   if (!rawProvider) {
     return res.status(400).json({ error: 'No active provider configured' });
   }
 
-  // ─── OpenCode provider: spawn CLI ───
-  if (rawProvider.id === 'opencode') {
-    const userMsg: Message = {
-      id: randomUUID(),
-      role: 'user',
-      content,
-      timestamp: new Date().toISOString(),
-      provider: 'OpenCode',
-      model: rawProvider.defaultModel,
-    };
-    addMessage({ ...userMsg, sessionId });
+  // Fire-and-forget agent (async streaming will happen over WebSocket)
+  runAgentChat(rawProvider, sessionId, content, projectRoot).catch(console.error);
 
-    try {
-      const { execFile } = await import('child_process');
-      const { promisify } = await import('util');
-      const execFileAsync = promisify(execFile);
-      const { stdout, stderr } = await execFileAsync('opencode', ['run', '--format', 'json', content], {
-        timeout: 60000, maxBuffer: 1024 * 1024,
-        env: { ...process.env, FORCE_COLOR: '0', NO_COLOR: '1' },
-      });
-      const clean = (stdout + stderr).replace(/\u001b\[[0-9;]*m/g, '').trim();
-      let responseText = '';
-      const lines = clean.split('\n').filter(l => l.trim());
-      for (const line of lines) {
-        try {
-          if (line.startsWith('{')) {
-            const parsed = JSON.parse(line);
-            if (parsed.type === 'text' && parsed.part?.text) responseText += parsed.part.text;
-            if (parsed.type === 'result' && parsed.result?.text) responseText += parsed.result.text;
-          }
-        } catch {}
-      }
-      if (!responseText) {
-        responseText = clean.split('\n').filter(l => !l.startsWith('>') && !l.includes('·') && !l.startsWith('{')).join('\n').trim();
-      }
-      const assistantMsg: Message = {
-        id: randomUUID(), role: 'assistant',
-        content: responseText || '(no response)',
-        timestamp: new Date().toISOString(),
-        provider: 'OpenCode', model: rawProvider.defaultModel,
-      };
-      addMessage({ ...assistantMsg, sessionId });
-      res.json({ messages: [userMsg, assistantMsg] });
-    } catch (err: any) {
-      const errorMsg: Message = { id: randomUUID(), role: 'assistant', content: `OpenCode error: ${err.message}`, timestamp: new Date().toISOString() };
-      addMessage({ ...errorMsg, sessionId });
-      res.status(500).json({ messages: [userMsg, errorMsg], error: err.message });
-    }
-    return;
-  }
-
-  // ─── Standard API providers ───
-  const provider = rawProvider;
-  const userMsg: Message = {
-    id: randomUUID(), role: 'user', content,
-    timestamp: new Date().toISOString(),
-    provider: provider.name, model: provider.defaultModel,
-  };
-  addMessage({ ...userMsg, sessionId });
-
-  try {
-    const history = getMessages(sessionId);
-    const result = await chatWithProvider(provider, history);
-    const assistantMsg: Message = {
-      id: randomUUID(), role: 'assistant', content: result.content,
-      timestamp: new Date().toISOString(),
-      provider: provider.name, model: result.model,
-    };
-    addMessage({ ...assistantMsg, sessionId });
-    res.json({ messages: [userMsg, assistantMsg] });
-  } catch (err) {
-    const errorMsg: Message = { id: randomUUID(), role: 'assistant', content: `Error: ${(err as Error).message}`, timestamp: new Date().toISOString() };
-    addMessage({ ...errorMsg, sessionId });
-    res.status(500).json({ messages: [userMsg, errorMsg], error: (err as Error).message });
-  }
+  // Immediate acknowledgment — client will get real messages via WebSocket + /sessions/:id/messages
+  res.json({ ok: true, status: 'running', sessionId });
 });
 
 // ========== Code Changes ==========

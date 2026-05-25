@@ -82,6 +82,8 @@ export default function ChatPanel() {
   });
   const [sessions, setSessions] = useState<any[]>([]);
   const [models, setModels] = useState<Record<string, string[]>>({});
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastPollCount = useRef(0);
 
   useEffect(() => {
     providersApi.list().then(setProviders);
@@ -130,11 +132,16 @@ export default function ChatPanel() {
       return;
     }
 
+    // ─── Start agent chat with project context ───
     setSending(true);
+    lastPollCount.current = 0;
+    if (pollRef.current) clearInterval(pollRef.current);
+
     try {
       const named = getActiveNamed();
       const backend = getActiveBackend();
       const providerId = named ? named.configId : (backend?.id || 'ollama');
+      const projectRoot = useStore.getState().projectRoot;
 
       const sessionRes = await fetch('/api/sessions', {
         method: 'POST',
@@ -146,19 +153,38 @@ export default function ChatPanel() {
         }),
       });
       const session = await sessionRes.json();
-      const res = await chatApi.send({ sessionId: session.id, content: text, providerId });
-      if (res.messages?.length) {
-        const last = res.messages[res.messages.length - 1];
-        if (last.role === 'assistant') {
-          addMsg({ role: 'assistant', content: last.content, provider: last.provider || providerId });
-          setVersion(version + 0.01);
-        }
-      } else {
-        addMsg({ role: 'error', content: 'No response from assistant.' });
-      }
+
+      const poll = async () => {
+        try {
+          const msgs = await (await fetch(`/api/sessions/${session.id}/messages`)).json();
+          if (msgs.length > lastPollCount.current) {
+            lastPollCount.current = msgs.length;
+            const last = msgs[msgs.length - 1];
+            if (last.role === 'assistant') {
+              setMessages(prev => {
+                if (prev.some(m => m.id === last.id)) return prev;
+                return [...prev, {
+                  role: 'assistant', content: last.content,
+                  provider: last.provider || providerId,
+                  id: last.id,
+                  timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                }];
+              });
+              setVersion(version + 0.01);
+            }
+          }
+        } catch {}
+      };
+
+      // Fire agent
+      await chatApi.send({ sessionId: session.id, content: text, providerId, projectRoot });
+
+      // Poll every 1.5s for results
+      pollRef.current = setInterval(poll, 1500);
+      // Auto-stop after 30s
+      setTimeout(() => { if (pollRef.current) clearInterval(pollRef.current); setSending(false); }, 30000);
     } catch (err: any) {
       addMsg({ role: 'error', content: `Chat error: ${err.message}` });
-    } finally {
       setSending(false);
     }
   };
