@@ -86,3 +86,10 @@ export const verifyApi = {
 export const actionsApi = {
   list: () => api<any[]>('/actions'),
 };
+
+export const testApi = {
+  run: (data: { root: string; mode: 'quick' | 'standard' | 'deep' }) =>
+    api<any>('/test', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data),
+    }),
+};

@@ -18,6 +18,20 @@ router.post('/providers/:id/test', async (req, res) => {
     const p = providers.find(x => x.id === req.params.id);
     if (!p)
         return res.status(404).json({ error: 'Provider not found' });
+    // Special: OpenCode uses local CLI
+    if (p.id === 'opencode') {
+        const start = Date.now();
+        try {
+            const { execFile } = await import('child_process');
+            const { promisify } = await import('util');
+            const execFileAsync = promisify(execFile);
+            const { stdout } = await execFileAsync('opencode', ['--version'], { timeout: 5000 });
+            return res.json({ ok: true, latency: Date.now() - start, models: ['ollama/kimi-k2.6:cloud', 'opencode/gpt-5', 'opencode/claude-sonnet-4'], version: stdout.trim() });
+        }
+        catch (err) {
+            return res.json({ ok: false, latency: Date.now() - start, error: err.message });
+        }
+    }
     const result = await testProvider(p);
     res.json(result);
 });
@@ -56,40 +70,84 @@ router.get('/sessions/:id/messages', (req, res) => {
 router.post('/chat', async (req, res) => {
     const { sessionId, content, providerId } = req.body;
     const providers = getProviders();
-    const provider = providers.find(p => p.id === providerId) || providers.find(p => p.enabled);
-    if (!provider) {
+    const rawProvider = providers.find(p => p.id === providerId) || providers.find(p => p.enabled);
+    if (!rawProvider) {
         return res.status(400).json({ error: 'No active provider configured' });
     }
+    // ─── OpenCode provider: spawn CLI ───
+    if (rawProvider.id === 'opencode') {
+        const userMsg = {
+            id: randomUUID(),
+            role: 'user',
+            content,
+            timestamp: new Date().toISOString(),
+            provider: 'OpenCode',
+            model: rawProvider.defaultModel,
+        };
+        addMessage({ ...userMsg, sessionId });
+        try {
+            const { execFile } = await import('child_process');
+            const { promisify } = await import('util');
+            const execFileAsync = promisify(execFile);
+            const { stdout, stderr } = await execFileAsync('opencode', ['run', '--format', 'json', content], {
+                timeout: 60000, maxBuffer: 1024 * 1024,
+                env: { ...process.env, FORCE_COLOR: '0', NO_COLOR: '1' },
+            });
+            const clean = (stdout + stderr).replace(/\u001b\[[0-9;]*m/g, '').trim();
+            let responseText = '';
+            const lines = clean.split('\n').filter(l => l.trim());
+            for (const line of lines) {
+                try {
+                    if (line.startsWith('{')) {
+                        const parsed = JSON.parse(line);
+                        if (parsed.type === 'text' && parsed.part?.text)
+                            responseText += parsed.part.text;
+                        if (parsed.type === 'result' && parsed.result?.text)
+                            responseText += parsed.result.text;
+                    }
+                }
+                catch { }
+            }
+            if (!responseText) {
+                responseText = clean.split('\n').filter(l => !l.startsWith('>') && !l.includes('·') && !l.startsWith('{')).join('\n').trim();
+            }
+            const assistantMsg = {
+                id: randomUUID(), role: 'assistant',
+                content: responseText || '(no response)',
+                timestamp: new Date().toISOString(),
+                provider: 'OpenCode', model: rawProvider.defaultModel,
+            };
+            addMessage({ ...assistantMsg, sessionId });
+            res.json({ messages: [userMsg, assistantMsg] });
+        }
+        catch (err) {
+            const errorMsg = { id: randomUUID(), role: 'assistant', content: `OpenCode error: ${err.message}`, timestamp: new Date().toISOString() };
+            addMessage({ ...errorMsg, sessionId });
+            res.status(500).json({ messages: [userMsg, errorMsg], error: err.message });
+        }
+        return;
+    }
+    // ─── Standard API providers ───
+    const provider = rawProvider;
     const userMsg = {
-        id: randomUUID(),
-        role: 'user',
-        content,
+        id: randomUUID(), role: 'user', content,
         timestamp: new Date().toISOString(),
-        provider: provider.name,
-        model: provider.defaultModel,
+        provider: provider.name, model: provider.defaultModel,
     };
     addMessage({ ...userMsg, sessionId });
     try {
         const history = getMessages(sessionId);
         const result = await chatWithProvider(provider, history);
         const assistantMsg = {
-            id: randomUUID(),
-            role: 'assistant',
-            content: result.content,
+            id: randomUUID(), role: 'assistant', content: result.content,
             timestamp: new Date().toISOString(),
-            provider: provider.name,
-            model: result.model,
+            provider: provider.name, model: result.model,
         };
         addMessage({ ...assistantMsg, sessionId });
         res.json({ messages: [userMsg, assistantMsg] });
     }
     catch (err) {
-        const errorMsg = {
-            id: randomUUID(),
-            role: 'assistant',
-            content: `Error: ${err.message}`,
-            timestamp: new Date().toISOString(),
-        };
+        const errorMsg = { id: randomUUID(), role: 'assistant', content: `Error: ${err.message}`, timestamp: new Date().toISOString() };
         addMessage({ ...errorMsg, sessionId });
         res.status(500).json({ messages: [userMsg, errorMsg], error: err.message });
     }
@@ -108,14 +166,8 @@ router.get('/loop', (_req, res) => {
 });
 router.post('/loop', (req, res) => {
     const state = {
-        id: randomUUID(),
-        iteration: 1,
-        stage: 'analyze',
-        status: 'running',
-        task: req.body.task || 'Autonomous task',
-        plan: [],
-        progress: 0,
-        logs: [],
+        id: randomUUID(), iteration: 1, stage: 'analyze', status: 'running',
+        task: req.body.task || 'Autonomous task', plan: [], progress: 0, logs: [],
         startTime: new Date().toISOString(),
     };
     createLoopState(state);
@@ -133,38 +185,16 @@ router.patch('/features/:id', (req, res) => {
 // ========== Test Results ==========
 router.get('/test-results', (_req, res) => {
     const rows = db.prepare('SELECT * FROM test_results ORDER BY timestamp DESC LIMIT 100').all();
-    res.json(rows.map(r => ({
-        id: r.id,
-        featureId: r.feature_id,
-        name: r.name,
-        status: r.status,
-        duration: r.duration,
-        error: r.error,
-        timestamp: r.timestamp,
-    })));
+    res.json(rows.map(r => ({ id: r.id, featureId: r.feature_id, name: r.name, status: r.status, duration: r.duration, error: r.error, timestamp: r.timestamp })));
 });
 // ========== Error Reports ==========
 router.get('/errors', (_req, res) => {
     const rows = db.prepare('SELECT * FROM error_reports ORDER BY timestamp DESC LIMIT 100').all();
-    res.json(rows.map(r => ({
-        id: r.id,
-        type: r.type,
-        message: r.message,
-        stack: r.stack,
-        source: r.source,
-        line: r.line,
-        column: r.col,
-        timestamp: r.timestamp,
-        status: r.status,
-        fix: r.fix,
-        verifiedAt: r.verified_at,
-    })));
+    res.json(rows.map(r => ({ id: r.id, type: r.type, message: r.message, stack: r.stack, source: r.source, line: r.line, column: r.col, timestamp: r.timestamp, status: r.status, fix: r.fix, verifiedAt: r.verified_at })));
 });
 router.post('/errors', (req, res) => {
-    db.prepare(`
-    INSERT INTO error_reports (id, type, message, stack, source, line, col, timestamp, status)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'open')
-  `).run(randomUUID(), req.body.type, req.body.message, req.body.stack || null, req.body.source || null, req.body.line || null, req.body.column || null, new Date().toISOString());
+    db.prepare('INSERT INTO error_reports (id, type, message, stack, source, line, col, timestamp, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+        .run(randomUUID(), req.body.type, req.body.message, req.body.stack || null, req.body.source || null, req.body.line || null, req.body.column || null, new Date().toISOString(), 'open');
     res.json({ ok: true });
 });
 router.post('/errors/:id/fix', (req, res) => {
@@ -175,15 +205,7 @@ router.post('/errors/:id/fix', (req, res) => {
 // ========== Agent Actions ==========
 router.get('/actions', (_req, res) => {
     const rows = db.prepare('SELECT * FROM agent_actions ORDER BY timestamp DESC LIMIT 200').all();
-    res.json(rows.map(r => ({
-        id: r.id,
-        agent: r.agent,
-        action: r.action,
-        target: r.target,
-        timestamp: r.timestamp,
-        status: r.status,
-        details: r.details,
-    })));
+    res.json(rows.map(r => ({ id: r.id, agent: r.agent, action: r.action, target: r.target, timestamp: r.timestamp, status: r.status, details: r.details })));
 });
 router.post('/actions', (req, res) => {
     db.prepare('INSERT INTO agent_actions (id, agent, action, target, timestamp, status, details) VALUES (?, ?, ?, ?, ?, ?, ?)')
@@ -193,15 +215,7 @@ router.post('/actions', (req, res) => {
 // ========== Verify Results ==========
 router.get('/verify', (_req, res) => {
     const rows = db.prepare('SELECT * FROM verify_results ORDER BY timestamp DESC LIMIT 50').all();
-    res.json(rows.map(r => ({
-        id: r.id,
-        featureId: r.feature_id,
-        timestamp: r.timestamp,
-        status: r.status,
-        screenshots: JSON.parse(r.screenshots || '[]'),
-        logs: JSON.parse(r.logs || '[]'),
-        error: r.error,
-    })));
+    res.json(rows.map(r => ({ id: r.id, featureId: r.feature_id, timestamp: r.timestamp, status: r.status, screenshots: JSON.parse(r.screenshots || '[]'), logs: JSON.parse(r.logs || '[]'), error: r.error })));
 });
 router.post('/verify', (req, res) => {
     db.prepare('INSERT INTO verify_results (id, feature_id, timestamp, status, screenshots, logs, error) VALUES (?, ?, ?, ?, ?, ?, ?)')
@@ -248,9 +262,6 @@ router.post('/swarm', async (req, res) => {
         return res.status(400).json({ error: 'Missing prompt or agentIds' });
     }
     const allProviders = getProviders();
-    // For this build, swarm agents are passed in the request body or matched by agent IDs.
-    // Since frontend passes agentIds, we read the frontend store data from request.
-    // But the backend doesn't have frontend store, so we accept agent configs in request.
     const agents = req.body.agents || [];
     const selectedAgents = agents.filter(a => agentIds.includes(a.id));
     if (selectedAgents.length === 0) {
@@ -261,40 +272,155 @@ router.post('/swarm', async (req, res) => {
     await Promise.all(selectedAgents.map(async (agent) => {
         const provider = allProviders.find(p => p.id === agent.providerId);
         if (!provider || !provider.enabled) {
-            results.push({
-                agentId: agent.id,
-                content: `Provider ${agent.providerId} not available`,
-                tokens: 0,
-                latency: 0,
-                timestamp: new Date().toISOString(),
-            });
+            results.push({ agentId: agent.id, content: `Provider ${agent.providerId} not available`, tokens: 0, latency: 0, timestamp: new Date().toISOString() });
             return;
         }
         const start = Date.now();
         try {
             const result = await sendSingleMessage(provider, agent.systemPrompt, prompt, agent.model, agent.temperature);
-            results.push({
-                agentId: agent.id,
-                content: result.content,
-                tokens: result.tokens || 0,
-                latency: Date.now() - start,
-                timestamp: new Date().toISOString(),
-            });
+            results.push({ agentId: agent.id, content: result.content, tokens: result.tokens || 0, latency: Date.now() - start, timestamp: new Date().toISOString() });
         }
         catch (err) {
-            results.push({
-                agentId: agent.id,
-                content: `Error: ${err.message}`,
-                tokens: 0,
-                latency: Date.now() - start,
-                timestamp: new Date().toISOString(),
-            });
+            results.push({ agentId: agent.id, content: `Error: ${err.message}`, tokens: 0, latency: Date.now() - start, timestamp: new Date().toISOString() });
         }
     }));
-    res.json({
-        prompt,
-        totalLatency: Date.now() - startAll,
-        results,
-    });
+    res.json({ prompt, totalLatency: Date.now() - startAll, results });
+});
+// ========== Testing Engine ==========
+router.post('/test', async (req, res) => {
+    const { root, mode } = req.body;
+    if (!root)
+        return res.status(400).json({ error: 'Missing root path' });
+    try {
+        const { analyzeProject } = await import('./test-analyzer.js');
+        const result = analyzeProject(root, mode || 'standard');
+        res.json(result);
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+// ========== UI Tester Proxy ==========
+router.get('/uitester/proxy', async (req, res) => {
+    const url = typeof req.query.url === 'string' ? req.query.url : '';
+    const bridge = typeof req.query.bridge === 'string' ? decodeURIComponent(req.query.bridge) : '';
+    if (!url)
+        return res.status(400).send('Missing url');
+    try {
+        const response = await fetch(url, { signal: AbortSignal.timeout(15000) });
+        let body = await response.text();
+        if (body.includes('\u003chead\u003e')) {
+            body = body.replace('\u003chead\u003e', '\u003chead\u003e' + bridge);
+        }
+        else if (body.includes('\u003chtml\u003e')) {
+            body = body.replace('\u003chtml\u003e', '\u003chtml\u003e' + bridge);
+        }
+        else {
+            body = bridge + body;
+        }
+        res.set('Content-Type', response.headers.get('content-type') || 'text/html');
+        res.send(body);
+    }
+    catch (err) {
+        res.status(500).send(`Failed to proxy: ${err.message}`);
+    }
+});
+// ========== Project Architecture Graph ==========
+router.get('/project-graph', async (req, res) => {
+    const root = typeof req.query.root === 'string' ? req.query.root : process.cwd();
+    try {
+        const { buildProjectGraph } = await import('./arch-graph.js');
+        const graph = buildProjectGraph(root);
+        res.json(graph);
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+// ========== Skills ==========
+router.post('/skills/terminal', async (req, res) => {
+    const { exec } = await import('child_process');
+    const { promisify } = await import('util');
+    const execAsync = promisify(exec);
+    const { command = 'echo no command' } = req.body || {};
+    try {
+        const { stdout, stderr } = await execAsync(command, { timeout: 30000, env: process.env });
+        res.json({ output: stdout + stderr });
+    }
+    catch (err) {
+        res.status(500).json({ error: err.stderr || err.message });
+    }
+});
+router.post('/skills/git', async (req, res) => {
+    const { spawn } = await import('child_process');
+    const { command = 'status' } = req.body || {};
+    const cwd = req.body?.cwd || '.';
+    try {
+        const proc = spawn('git', command.split(' '), { cwd, stdio: 'pipe' });
+        let out = '', err = '';
+        proc.stdout.on('data', (d) => out += d.toString());
+        proc.stderr.on('data', (d) => err += d.toString());
+        proc.on('close', (code) => {
+            if (code === 0)
+                res.json({ output: out || err });
+            else
+                res.status(500).json({ error: err || `Git exited with ${code}` });
+        });
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+router.get('/skills/brave', async (req, res) => {
+    const q = typeof req.query.q === 'string' ? req.query.q : '';
+    if (!q)
+        return res.status(400).json({ error: 'Missing q' });
+    try {
+        const { search } = await import('./skills/brave.js');
+        const results = await search(q);
+        res.json({ results });
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+router.get('/skills/fetch', async (req, res) => {
+    const url = typeof req.query.url === 'string' ? req.query.url : '';
+    if (!url)
+        return res.status(400).json({ error: 'Missing url' });
+    try {
+        const { fetchPage } = await import('./skills/fetch.js');
+        const content = await fetchPage(url);
+        res.json({ content });
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+router.post('/skills/context7', async (req, res) => {
+    const { library } = req.body || {};
+    if (!library)
+        return res.status(400).json({ error: 'Missing library' });
+    try {
+        const { getDocs } = await import('./skills/context7.js');
+        const docs = await getDocs(library);
+        res.json({ docs });
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+router.post('/skills/playwright', async (req, res) => {
+    const { url, action } = req.body || {};
+    if (!url)
+        return res.status(400).json({ error: 'Missing url' });
+    try {
+        const data = await import('./skills/playwright.js');
+        const result = await data.runTest({ url, action });
+        res.json({ result });
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 //# sourceMappingURL=routes.js.map

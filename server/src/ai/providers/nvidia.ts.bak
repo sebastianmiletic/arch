@@ -1,0 +1,66 @@
+// providers/nvidia.ts — NVIDIA NIM Provider Adapter
+// ---------------------------------------------------------------------------
+
+import {
+  type AIProviderConfig,
+  type AIChatRequest,
+  type AIChatResponse,
+  type AIStreamChunk,
+  type AIModel,
+  type AIConnectionTest,
+} from 'types.js';
+import { OpenAIProvider } from './openai.js';
+
+export class NvidiaProvider extends OpenAIProvider {
+  id = 'nvidia';
+  name = 'NVIDIA NIM';
+  type = 'nvidia';
+
+  constructor(config: AIProviderConfig) {
+    super({
+      ...config,
+      baseUrl: (config.baseUrl ?? 'https://integrate.api.nvidia.com/v1').replace(/\/+$/, ''),
+    });
+  }
+
+  getCapabilities(): string[] {
+    return this.config.capabilities?.length
+      ? this.config.capabilities
+      : ['chat', 'stream', 'embed'];
+  }
+
+  async listModels(): Promise<AIModel[]> {
+    // NVIDIA NIM does not expose a public /models list; return known families.
+    return [
+      { id: 'meta/llama3-8b-instruct', name: 'Llama 3 8B Instruct', provider: this.id },
+      { id: 'meta/llama3-70b-instruct', name: 'Llama 3 70B Instruct', provider: this.id },
+      { id: 'nvidia/nemotron-4-340b-instruct', name: 'Nemotron-4 340B Instruct', provider: this.id },
+    ];
+  }
+
+  async embed(_texts: string[]): Promise<number[][]> {
+    throw new Error('NVIDIA NIM embed not implemented in this adapter.');
+  }
+
+  async test(): Promise<AIConnectionTest> {
+    const start = Date.now();
+    try {
+      const models = await this.listModels();
+      return {
+        ok: true,
+        latency: Date.now() - start,
+        models,
+        capabilities: this.getCapabilities(),
+        streaming: this.supports('stream'),
+      };
+    } catch (err) {
+      return {
+        ok: false,
+        latency: Date.now() - start,
+        error: err instanceof Error ? err.message : String(err),
+        capabilities: this.getCapabilities(),
+        streaming: this.supports('stream'),
+      };
+    }
+  }
+}

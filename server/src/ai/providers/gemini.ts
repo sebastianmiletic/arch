@@ -1,0 +1,197 @@
+// providers/gemini.ts — Google Gemini Provider Adapter
+// ---------------------------------------------------------------------------
+
+import {
+  type AIProviderConfig,
+  type AIChatRequest,
+  type AIChatResponse,
+  type AIStreamChunk,
+  type AIModel,
+  type AIConnectionTest,
+} from '../types.js';
+import { BaseAIProvider } from './base.js';
+
+export class GeminiProvider extends BaseAIProvider {
+  id = 'gemini';
+  name = 'Google Gemini';
+  type = 'gemini';
+  private endpoint: string;
+
+  constructor(config: AIProviderConfig) {
+    super(config);
+    this.endpoint = (config.baseUrl ?? 'https://generativelanguage.googleapis.com/v1beta').replace(/\/+$/, '');
+  }
+
+  getCapabilities(): string[] {
+    return this.config.capabilities?.length
+      ? this.config.capabilities
+      : ['chat', 'stream', 'embed', 'reason', 'vision', 'tool_call'];
+  }
+
+  private apiKeyParam(): string {
+    return `key=${this.config.apiKey ?? ''}`;
+  }
+
+  private toGeminiContents(request: AIChatRequest): Record<string, unknown>[] {
+    const contents = [];
+    for (const m of request.messages) {
+      if (m.role === 'system') continue;
+      contents.push({
+        role: m.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: m.content }],
+      });
+    }
+    return contents;
+  }
+
+  private buildGeminiBody(request: AIChatRequest): Record<string, unknown> {
+    const systemMsg = request.system ?? request.messages.find((m) => m.role === 'system')?.content;
+    const body: Record<string, unknown> = {
+      contents: this.toGeminiContents(request),
+      generationConfig: {
+        temperature: request.temperature ?? this.config.temperature,
+        maxOutputTokens: request.maxTokens ?? this.config.maxTokens,
+      },
+    };
+    if (systemMsg) {
+      body.systemInstruction = { parts: [{ text: systemMsg }] };
+    }
+    return body;
+  }
+
+  async chat(request: AIChatRequest): Promise<AIChatResponse> {
+    const model = request.model ?? this.config.defaultModel;
+    const url = `${this.endpoint}/models/${model}:generateContent?${this.apiKeyParam()}`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(this.buildGeminiBody(request)),
+      signal: AbortSignal.timeout(120000),
+    });
+    if (!res.ok) throw new Error(`Gemini chat error: ${res.status} ${await res.text()}`);
+    const data = await res.json();
+    const candidate = data?.candidates?.[0];
+    const content = candidate?.content?.parts?.map((p: any) => p.text ?? '').join('') ?? '';
+    const usage = data?.usageMetadata;
+    return {
+      content,
+      model,
+      tokens: usage
+        ? {
+            prompt: usage.promptTokenCount ?? 0,
+            completion: usage.candidatesTokenCount ?? 0,
+            total: usage.totalTokenCount ?? 0,
+          }
+        : undefined,
+    };
+  }
+
+  async *stream(request: AIChatRequest): AsyncGenerator<AIStreamChunk> {
+    const model = request.model ?? this.config.defaultModel;
+    const url = `${this.endpoint}/models/${model}:streamGenerateContent?${this.apiKeyParam()}`;
+    const body = this.buildGeminiBody(request);
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(120000),
+    });
+    if (!res.ok) throw new Error(`Gemini stream error: ${res.status} ${await res.text()}`);
+    if (!res.body) throw new Error('Gemini stream: empty body');
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+          try {
+            const parsed = JSON.parse(trimmed);
+            const candidate = parsed?.candidates?.[0];
+            const text = candidate?.content?.parts?.map((p: any) => p.text ?? '').join('') ?? '';
+            const finishReason = candidate?.finishReason;
+            const isDone = finishReason && finishReason !== 'STOP' ? true : false;
+            yield { content: text, done: isDone, model };
+            if (isDone) return;
+          } catch {
+            // ignore
+          }
+        }
+      }
+      if (buffer.trim()) {
+        try {
+          const parsed = JSON.parse(buffer);
+          const candidate = parsed?.candidates?.[0];
+          const text = candidate?.content?.parts?.map((p: any) => p.text ?? '').join('') ?? '';
+          yield { content: text, done: true, model };
+        } catch {
+          // ignore
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
+  }
+
+  async listModels(): Promise<AIModel[]> {
+    const url = `${this.endpoint}/models?${this.apiKeyParam()}`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(30000) });
+    if (!res.ok) throw new Error(`Gemini list models error: ${res.status}`);
+    const data = await res.json();
+    const models: any[] = data?.models ?? [];
+    return models.map((m: any) => ({
+      id: m.name,
+      name: m.displayName ?? m.name,
+      provider: this.id,
+      description: m.description ?? undefined,
+    }));
+  }
+
+  async embed(texts: string[]): Promise<number[][]> {
+    const model = `models/${this.config.defaultModel}`; // Gemini embed model naming
+    const url = `${this.endpoint}/${model}:batchEmbedContents?${this.apiKeyParam()}`;
+    const requests = texts.map((text) => ({
+      model,
+      content: { parts: [{ text }] },
+    }));
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requests }),
+      signal: AbortSignal.timeout(60000),
+    });
+    if (!res.ok) throw new Error(`Gemini embed error: ${res.status} ${await res.text()}`);
+    const data = await res.json();
+    const embeddings: any[] = data?.embeddings ?? [];
+    return embeddings.map((e: any) => (e.values as number[]));
+  }
+
+  async test(): Promise<AIConnectionTest> {
+    const start = Date.now();
+    try {
+      const models = await this.listModels();
+      return {
+        ok: true,
+        latency: Date.now() - start,
+        models,
+        capabilities: this.getCapabilities(),
+        streaming: this.supports('stream'),
+      };
+    } catch (err) {
+      return {
+        ok: false,
+        latency: Date.now() - start,
+        error: err instanceof Error ? err.message : String(err),
+        capabilities: this.getCapabilities(),
+        streaming: this.supports('stream'),
+      };
+    }
+  }
+}

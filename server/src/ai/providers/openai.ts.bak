@@ -1,0 +1,137 @@
+// providers/openai.ts — OpenAI Provider Adapter
+// ---------------------------------------------------------------------------
+
+import {
+  type AIProviderConfig,
+  type AIChatRequest,
+  type AIChatResponse,
+  type AIStreamChunk,
+  type AIModel,
+  type AIConnectionTest,
+} from 'types.js';
+import { BaseAIProvider } from './base.js';
+
+export class OpenAIProvider extends BaseAIProvider {
+  id = 'openai';
+  name = 'OpenAI';
+  type = 'openai';
+  private endpoint: string;
+
+  constructor(config: AIProviderConfig) {
+    super(config);
+    this.endpoint = (config.baseUrl ?? 'https://api.openai.com/v1').replace(/\/+$/, '');
+  }
+
+  getCapabilities(): string[] {
+    return this.config.capabilities?.length
+      ? this.config.capabilities
+      : ['chat', 'stream', 'embed', 'reason', 'vision', 'tool_call'];
+  }
+
+  async chat(request: AIChatRequest): Promise<AIChatResponse> {
+    const url = `${this.endpoint}/chat/completions`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: this.buildHeaders(),
+      body: this.buildBody(request),
+      signal: AbortSignal.timeout(120000),
+    });
+    if (!res.ok) throw new Error(`OpenAI chat error: ${res.status} ${await res.text()}`);
+    const data = await res.json();
+    return this.parseStandardResponse(data);
+  }
+
+  async *stream(request: AIChatRequest): AsyncGenerator<AIStreamChunk> {
+    const url = `${this.endpoint}/chat/completions`;
+    const payload = JSON.parse(this.buildBody(request));
+    payload.stream = true;
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { ...this.buildHeaders(), Accept: 'text/event-stream' },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(120000),
+    });
+    if (!res.ok) throw new Error(`OpenAI stream error: ${res.status} ${await res.text()}`);
+    if (!res.body) throw new Error('OpenAI stream: empty body');
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+        for (const line of lines) {
+          const chunk = this.parseStandardStream(line);
+          if (chunk) yield chunk;
+          if (chunk?.done) return;
+        }
+      }
+      if (buffer.trim()) {
+        const chunk = this.parseStandardStream(buffer);
+        if (chunk) yield chunk;
+      }
+    } finally {
+      reader.releaseLock();
+    }
+  }
+
+  async listModels(): Promise<AIModel[]> {
+    const res = await fetch(`${this.endpoint}/models`, {
+      headers: this.buildHeaders(),
+      signal: AbortSignal.timeout(30000),
+    });
+    if (!res.ok) throw new Error(`OpenAI list models error: ${res.status}`);
+    const data = await res.json();
+    const openaiModels: any[] = data?.data ?? [];
+    return openaiModels.map((m: any) => ({
+      id: m.id,
+      name: m.id,
+      provider: this.id,
+      description: m.owned_by ?? undefined,
+    }));
+  }
+
+  async embed(texts: string[]): Promise<number[][]> {
+    const url = `${this.endpoint}/embeddings`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: this.buildHeaders(),
+      body: JSON.stringify({
+        model: this.config.defaultModel,
+        input: texts,
+      }),
+      signal: AbortSignal.timeout(60000),
+    });
+    if (!res.ok) throw new Error(`OpenAI embed error: ${res.status} ${await res.text()}`);
+    const data = await res.json();
+    const list: any[] = data?.data ?? [];
+    return list.map((d: any) => (d.embedding as number[]));
+  }
+
+  async test(): Promise<AIConnectionTest> {
+    const start = Date.now();
+    try {
+      const models = await this.listModels();
+      return {
+        ok: true,
+        latency: Date.now() - start,
+        models,
+        capabilities: this.getCapabilities(),
+        streaming: this.supports('stream'),
+      };
+    } catch (err) {
+      return {
+        ok: false,
+        latency: Date.now() - start,
+        error: err instanceof Error ? err.message : String(err),
+        capabilities: this.getCapabilities(),
+        streaming: this.supports('stream'),
+      };
+    }
+  }
+}

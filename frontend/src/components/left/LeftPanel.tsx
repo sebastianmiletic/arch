@@ -80,22 +80,25 @@ function FileExplorer() {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const projectRoot = useStore(s => s.projectRoot);
+
   const loadTree = useCallback(async () => {
     setLoading(true);
     try {
-      const rootPath = (window as any).__PROJECT_ROOT__ || '/Users/sebastianmiletic/Arch';
+      const rootPath = projectRoot || (window as any).__PROJECT_ROOT__ || '/';
       const tree = await filesApi.tree(rootPath);
       setFileTree(tree);
-    } catch {
+    } catch (err) {
+      console.error('Failed to load file tree:', err);
       setFileTree(null);
     } finally {
       setLoading(false);
     }
-  }, [setFileTree]);
+  }, [setFileTree, projectRoot]);
 
   useEffect(() => {
     loadTree();
-  }, [loadTree]);
+  }, [loadTree, projectRoot]);
 
   const handleFileClick = async (node: FileNode) => {
     if (node.type !== 'file') return;

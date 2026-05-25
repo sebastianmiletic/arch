@@ -160,34 +160,50 @@ export interface Extension {
   component: string; // which React component to render
 }
 
-export interface SwarmAgent {
+export interface TestIssue {
   id: string;
-  name: string;
-  role: string;
-  providerId: string;
-  model: string;
-  temperature: number;
-  systemPrompt: string;
-  active: boolean;
-  color: string;
+  category: string;
+  file?: string;
+  line?: number;
+  column?: number;
+  severity: 'info' | 'warning' | 'error' | 'critical';
+  message: string;
+  fixSuggestion: string;
+  scoreImpact: number;
 }
 
-export interface SwarmJob {
-  id: string;
-  prompt: string;
-  agents: string[]; // agent ids
-  status: 'queued' | 'running' | 'done' | 'error';
-  results: SwarmResult[];
-  createdAt: string;
-  completedAt?: string;
+export interface TestResult {
+  mode: string;
+  root: string;
+  totalFiles: number;
+  scannedFiles: number;
+  scores: Record<string, number>;
+  overallScore: number;
+  issues: TestIssue[];
+  duration: number;
 }
 
-export interface SwarmResult {
-  agentId: string;
-  content: string;
-  tokens: number;
-  latency: number;
-  timestamp: string;
+export interface UITestLog {
+  id: string;
+  message: string;
+  source?: string;
+  line?: number;
+  col?: number;
+  stack?: string;
+  timestamp: number;
+  projectUrl: string;
+}
+
+
+
+export interface NamedProvider {
+  id: string;
+  name: string;          // user-given name, e.g. "My OpenAI Key"
+  configId: string;      // provider type: openai, anthropic, ollama, etc.
+  apiKey?: string;
+  baseUrl?: string;
+  defaultModel?: string;
+  enabled: boolean;
 }
 
 export interface AppSettings {
@@ -201,4 +217,5 @@ export interface AppSettings {
   minimizeToTray: boolean;
   startupBehavior: 'welcome' | 'last_project';
   telemetry: boolean;
+  pinnedAddons: string[];
 }

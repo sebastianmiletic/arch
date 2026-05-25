@@ -1,0 +1,191 @@
+// providers/anthropic.ts — Anthropic Provider Adapter
+// ---------------------------------------------------------------------------
+
+import {
+  type AIProviderConfig,
+  type AIChatRequest,
+  type AIChatResponse,
+  type AIStreamChunk,
+  type AIModel,
+  type AIConnectionTest,
+} from '../types.js';
+import { BaseAIProvider } from './base.js';
+
+export class AnthropicProvider extends BaseAIProvider {
+  id = 'anthropic';
+  name = 'Anthropic';
+  type = 'anthropic';
+  private endpoint: string;
+
+  constructor(config: AIProviderConfig) {
+    super(config);
+    this.endpoint = (config.baseUrl ?? 'https://api.anthropic.com').replace(/\/+$/, '');
+  }
+
+  getCapabilities(): string[] {
+    return this.config.capabilities?.length
+      ? this.config.capabilities
+      : ['chat', 'stream', 'reason', 'vision', 'tool_call'];
+  }
+
+  buildHeaders(): Record<string, string> {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'x-api-key': this.config.apiKey ?? '',
+      'anthropic-version': '2023-06-01',
+    };
+    return headers;
+  }
+
+  private toAnthropicBody(request: AIChatRequest): Record<string, unknown> {
+    const systemMsg = request.system ?? request.messages.find((m) => m.role === 'system')?.content;
+    const messages = request.messages
+      .filter((m) => m.role !== 'system')
+      .map((m) => ({
+        role: m.role === 'assistant' ? 'assistant' : 'user',
+        content: m.content,
+      }));
+    const body: Record<string, unknown> = {
+      model: request.model ?? this.config.defaultModel,
+      messages,
+      max_tokens: request.maxTokens ?? this.config.maxTokens,
+      temperature: request.temperature ?? this.config.temperature,
+    };
+    if (systemMsg) body.system = systemMsg;
+    if (request.stream) body.stream = true;
+    return body;
+  }
+
+  async chat(request: AIChatRequest): Promise<AIChatResponse> {
+    const url = `${this.endpoint}/v1/messages`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: this.buildHeaders(),
+      body: JSON.stringify(this.toAnthropicBody(request)),
+      signal: AbortSignal.timeout(120000),
+    });
+    if (!res.ok) throw new Error(`Anthropic chat error: ${res.status} ${await res.text()}`);
+    const data = await res.json();
+    const content: string =
+      data?.content?.[0]?.text ?? data?.completion ?? '';
+    const inputTokens = data?.usage?.input_tokens ?? 0;
+    const outputTokens = data?.usage?.output_tokens ?? 0;
+    return {
+      content,
+      model: data?.model ?? request.model ?? this.config.defaultModel,
+      tokens: {
+        prompt: inputTokens,
+        completion: outputTokens,
+        total: inputTokens + outputTokens,
+      },
+    };
+  }
+
+  async *stream(request: AIChatRequest): AsyncGenerator<AIStreamChunk> {
+    const url = `${this.endpoint}/v1/messages`;
+    const body = this.toAnthropicBody(request);
+    body.stream = true;
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { ...this.buildHeaders(), Accept: 'text/event-stream' },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(120000),
+    });
+    if (!res.ok) throw new Error(`Anthropic stream error: ${res.status} ${await res.text()}`);
+    if (!res.body) throw new Error('Anthropic stream: empty body');
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || !trimmed.startsWith('data: ')) continue;
+          const jsonStr = trimmed.replace(/^data: /, '');
+          if (jsonStr === '[DONE]') {
+            yield { content: '', done: true, model: request.model ?? this.config.defaultModel };
+            return;
+          }
+          try {
+            const parsed = JSON.parse(jsonStr);
+            const delta = parsed?.delta;
+            let text = '';
+            if (delta?.type === 'text_delta') text = delta.text ?? '';
+            else if (parsed?.type === 'content_block_delta') text = parsed.delta?.text ?? '';
+            const isDone = parsed?.type === 'message_stop' || parsed?.type === 'message_delta';
+            yield { content: text, done: isDone, model: request.model ?? this.config.defaultModel };
+            if (isDone) return;
+          } catch {
+            // ignore malformed
+          }
+        }
+      }
+      if (buffer.trim()) {
+        try {
+          const parsed = JSON.parse(buffer.replace(/^data: /, ''));
+          yield { content: parsed?.delta?.text ?? '', done: true, model: request.model ?? this.config.defaultModel };
+        } catch {
+          // ignore
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
+  }
+
+  async listModels(): Promise<AIModel[]> {
+    const url = `${this.endpoint}/v1/models`;
+    const res = await fetch(url, {
+      headers: { 'x-api-key': this.config.apiKey ?? '', 'anthropic-version': '2023-06-01' },
+      signal: AbortSignal.timeout(30000),
+    });
+    if (!res.ok) {
+      // Anthropic models endpoint may be restricted; fallback to known list.
+      return [
+        { id: 'claude-3-opus-20240229', name: 'Claude 3 Opus', provider: this.id },
+        { id: 'claude-3-sonnet-20240229', name: 'Claude 3 Sonnet', provider: this.id },
+        { id: 'claude-3-haiku-20240307', name: 'Claude 3 Haiku', provider: this.id },
+      ];
+    }
+    const data = await res.json();
+    const list: any[] = data?.data ?? [];
+    return list.map((m: any) => ({
+      id: m.id,
+      name: m.display_name ?? m.id,
+      provider: this.id,
+    }));
+  }
+
+  async embed(_texts: string[]): Promise<number[][]> {
+    throw new Error('Anthropic does not expose an embedding endpoint through this adapter.');
+  }
+
+  async test(): Promise<AIConnectionTest> {
+    const start = Date.now();
+    try {
+      const models = await this.listModels();
+      return {
+        ok: true,
+        latency: Date.now() - start,
+        models,
+        capabilities: this.getCapabilities(),
+        streaming: this.supports('stream'),
+      };
+    } catch (err) {
+      return {
+        ok: false,
+        latency: Date.now() - start,
+        error: err instanceof Error ? err.message : String(err),
+        capabilities: this.getCapabilities(),
+        streaming: this.supports('stream'),
+      };
+    }
+  }
+}

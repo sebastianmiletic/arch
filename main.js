@@ -3,10 +3,29 @@ const path = require('path');
 const { spawn } = require('child_process');
 const http = require('http');
 const fs = require('fs');
+const os = require('os');
 
 // Fix GPU sandbox crash on unsigned macOS apps
 app.commandLine.appendSwitch('disable-gpu-sandbox');
 app.commandLine.appendSwitch('disable-software-rasterizer');
+
+// Find Node.js binary: check common paths, then fallback to PATH
+function findNodeBinary() {
+  const candidates = [
+    '/opt/homebrew/bin/node',
+    '/usr/local/bin/node',
+    '/usr/bin/node',
+    path.join(os.homedir(), '.nvm/versions/node/v22.15.0/bin/node'),
+    path.join(os.homedir(), '.nvm/versions/node/v20.0.0/bin/node'),
+    path.join(os.homedir(), '.n/bin/node'),
+  ];
+  for (const c of candidates) {
+    if (fs.existsSync(c)) return c;
+  }
+  return 'node'; // fallback to PATH
+}
+
+const NODE_BIN = findNodeBinary();
 
 // IPC: project directory selector
 ipcMain.handle('select-project', async () => {
@@ -141,10 +160,18 @@ function startBackend() {
   const dbDir = app.getPath('userData');
   log(`DB dir: ${dbDir}`);
 
-  backend = spawn('node', ['dist/server.js'], {
+  // Capture user's shell PATH so opencode, ollama, etc. are available
+  let userPath = process.env.PATH || '';
+  try {
+    const shell = process.env.SHELL || '/bin/zsh';
+    const shellEnv = require('child_process').execSync(`${shell} -ilc 'echo $PATH'`, { encoding: 'utf-8', timeout: 3000 }).trim();
+    if (shellEnv) userPath = shellEnv;
+  } catch {}
+
+  backend = spawn(NODE_BIN, ['dist/server.js'], {
     cwd: serverDir,
     stdio: 'inherit',
-    env: { ...process.env, DB_PATH: path.join(dbDir, 'studio.db') },
+    env: { ...process.env, PATH: userPath, DB_PATH: path.join(dbDir, 'studio.db') },
   });
 
   backend.on('error', (err) => log(`Backend spawn error: ${err.message}`));

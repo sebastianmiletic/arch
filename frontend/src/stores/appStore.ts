@@ -1,32 +1,14 @@
 import { create } from 'zustand';
-import type { ProviderConfig, ChatSession, Message, CodeChange, LoopState, Feature, ErrorReport, ThemeId, ThemeConfig, Extension, SwarmAgent, SwarmJob, AppSettings, FileNode } from '../types';
+import type { ProviderConfig, ChatSession, Message, CodeChange, LoopState, Feature, ErrorReport, ThemeId, ThemeConfig, Extension, AppSettings, FileNode } from '../types';
 
 interface SkillItem {
   id: string;
   name: string;
   description: string;
   icon: string;
-  category: string;
+  category?: string;
   enabled: boolean;
 }
-
-const defaultSkills: SkillItem[] = [
-  { id: 'codegen', name: 'Code Generation', description: 'Generate code snippets and boilerplate', icon: 'code', category: 'core', enabled: true },
-  { id: 'refactor', name: 'Refactoring', description: 'Restructure existing code safely', icon: 'scissors', category: 'core', enabled: true },
-  { id: 'debug', name: 'Debugging', description: 'Find and fix bugs in code', icon: 'bug', category: 'core', enabled: true },
-  { id: 'testgen', name: 'Test Generation', description: 'Write unit and integration tests', icon: 'check-circle', category: 'core', enabled: true },
-  { id: 'docs', name: 'Documentation', description: 'Generate docs and comments', icon: 'book', category: 'core', enabled: true },
-  { id: 'review', name: 'Code Review', description: 'Review code for quality issues', icon: 'eye', category: 'advanced', enabled: false },
-  { id: 'chat', name: 'Chat Assistant', description: 'General-purpose conversational help', icon: 'message-square', category: 'advanced', enabled: true },
-  { id: 'i18n', name: 'Translation', description: 'Translate between languages', icon: 'languages', category: 'advanced', enabled: false },
-  { id: 'optimize', name: 'Optimization', description: 'Performance and memory optimization', icon: 'zap', category: 'advanced', enabled: false },
-  { id: 'security', name: 'Security Scan', description: 'Scan for vulnerabilities', icon: 'shield', category: 'advanced', enabled: false },
-  { id: 'git', name: 'Git Operations', description: 'Branch, commit, and diff helpers', icon: 'git-branch', category: 'advanced', enabled: false },
-  { id: 'db', name: 'Database', description: 'SQL and schema generation', icon: 'database', category: 'advanced', enabled: false },
-  { id: 'search', name: 'Semantic Search', description: 'Find similar code across projects', icon: 'search', category: 'advanced', enabled: false },
-  { id: 'api', name: 'API Design', description: 'REST and GraphQL scaffolding', icon: 'globe', category: 'advanced', enabled: false },
-  { id: 'docker', name: 'Containers', description: 'Dockerfile and compose generation', icon: 'container', category: 'advanced', enabled: false },
-];
 
 export const themes: Record<ThemeId, ThemeConfig> = {
   orion: {
@@ -193,28 +175,14 @@ export const themes: Record<ThemeId, ThemeConfig> = {
 };
 
 const defaultExtensions: Extension[] = [
-  // CORE — always in main tab bar
-  { id: 'home', name: 'Home', description: 'Project overview dashboard', category: 'core', installed: true, version: '1.0.0', author: 'Arch', icon: 'terminal', dependencies: [], component: 'HomeScreen' },
-  { id: 'search', name: 'Search', description: 'Search across all project files and content', category: 'core', installed: true, version: '1.0.0', author: 'Arch', icon: 'search', dependencies: [], component: 'CodebaseSearch' },
-  // MAIN WORKING EXTENSIONS
-  { id: 'swarm', name: 'Swarm', description: 'Multi-provider multi-model agent orchestration', category: 'agent', installed: true, version: '1.0.0', author: 'Arch', icon: 'users', dependencies: [], component: 'SwarmPanel' },
-  { id: 'models', name: 'Models', description: 'Compare responses from multiple providers side-by-side', category: 'model', installed: true, version: '1.0.0', author: 'Arch', icon: 'cpu', dependencies: [], component: 'ModelComparison' },
-  { id: 'skills', name: 'Skills', description: '15 toggleable capabilities from codegen to docker', category: 'tool', installed: true, version: '1.0.0', author: 'Arch', icon: 'zap', dependencies: [], component: 'SkillsPanel' },
-  { id: 'tests', name: 'Tests', description: 'Simulated test suite with pass/fail metrics and retry', category: 'tool', installed: true, version: '1.0.0', author: 'Arch', icon: 'flask-conical', dependencies: [], component: 'TestingDashboard' },
+  { id: 'search', name: 'Search', description: 'Search across all project files and content', category: 'core', installed: false, version: '1.0.0', author: 'Arch', icon: 'search', dependencies: [], component: 'CodebaseSearch' },
+  { id: 'models', name: 'Models', description: 'Compare responses from multiple AI providers side-by-side', category: 'model', installed: false, version: '1.0.0', author: 'Arch', icon: 'cpu', dependencies: [], component: 'ModelComparison' },
+  { id: 'tests', name: 'Tests', description: 'Run comprehensive tests across the entire codebase', category: 'tool', installed: true, version: '1.0.0', author: 'Arch', icon: 'flask-conical', dependencies: [], component: 'TestingDashboard' },
   { id: 'arch', name: 'Arch', description: '2D dependency graph of the entire stack', category: 'visualization', installed: true, version: '1.0.0', author: 'Arch', icon: 'layers', dependencies: [], component: 'ArchitectureViz' },
-  // AVAILABLE IN STORE
+  { id: 'uitester', name: 'UI Tester', description: 'Preview your app, capture runtime errors, fix them with AI', category: 'tool', installed: true, version: '1.0.0', author: 'Arch', icon: 'eye', dependencies: [], component: 'UITester' },
+  // AVAILABLE IN ADDON LIBRARY (uninstalled by default)
+  { id: 'skills', name: 'Skills', description: 'Toggleable AI capabilities and tools', category: 'tool', installed: false, version: '1.0.0', author: 'Arch', icon: 'zap', dependencies: [], component: 'SkillsPanel' },
   { id: 'github', name: 'GitHub', description: 'Browse repos, commits, and file trees', category: 'tool', installed: false, version: '1.0.0', author: 'Arch', icon: 'git-branch', dependencies: [], component: 'GitHubViewer' },
-  // Store itself is accessed via header icon
-  { id: 'store', name: 'Extension Store', description: 'Marketplace for installing new extensions', category: 'core', installed: true, version: '1.0.0', author: 'Arch', icon: 'shopping-bag', dependencies: [], component: 'ExtensionStore' },
-];
-
-const defaultSwarmAgents: SwarmAgent[] = [
-  { id: 'debug-agent', name: 'Debugger', role: 'debug', providerId: 'ollama', model: 'codellama', temperature: 0.2, systemPrompt: 'You are a senior debugging specialist. Analyze code, find bugs, and explain fixes in detail. Always show the corrected code.', active: true, color: '#ff6b6b' },
-  { id: 'refactor-agent', name: 'Refactorer', role: 'refactor', providerId: 'ollama', model: 'llama3.2', temperature: 0.3, systemPrompt: 'You are a code refactoring expert. Improve code structure, naming, and patterns while preserving behavior. Show before/after.', active: true, color: '#4ecdc4' },
-  { id: 'test-agent', name: 'Test Writer', role: 'test', providerId: 'ollama', model: 'llama3.1', temperature: 0.4, systemPrompt: 'You are a test engineer. Write comprehensive unit and integration tests. Cover edge cases and use mocking where needed.', active: true, color: '#ffe66d' },
-  { id: 'doc-agent', name: 'Documenter', role: 'docs', providerId: 'ollama', model: 'llama3.2', temperature: 0.5, systemPrompt: 'You are a technical writer. Write clear documentation, comments, and README sections. Explain complex logic simply.', active: false, color: '#a8e6cf' },
-  { id: 'security-agent', name: 'Security', role: 'security', providerId: 'ollama', model: 'llama3.1', temperature: 0.2, systemPrompt: 'You are a security auditor. Scan code for vulnerabilities, injection risks, and unsafe patterns. Suggest hardening measures.', active: false, color: '#ff8b94' },
-  { id: 'optimize-agent', name: 'Optimizer', role: 'optimize', providerId: 'ollama', model: 'codellama', temperature: 0.3, systemPrompt: 'You are a performance engineer. Find bottlenecks, suggest algorithmic improvements, and optimize memory usage. Show benchmarks.', active: false, color: '#c7ceea' },
 ];
 
 const defaultSettings: AppSettings = {
@@ -228,6 +196,7 @@ const defaultSettings: AppSettings = {
   minimizeToTray: false,
   startupBehavior: 'welcome',
   telemetry: false,
+  pinnedAddons: [],
 };
 
 export interface AppStore {
@@ -266,12 +235,8 @@ export interface AppStore {
   setExtensions: (e: Extension[]) => void;
   installExtension: (id: string) => void;
   uninstallExtension: (id: string) => void;
-  swarmAgents: SwarmAgent[];
-  setSwarmAgents: (a: SwarmAgent[]) => void;
-  swarmJobs: SwarmJob[];
-  setSwarmJobs: (j: SwarmJob[]) => void;
-  addSwarmJob: (j: SwarmJob) => void;
   skills: SkillItem[];
+  setSkills: (s: SkillItem[]) => void;
   toggleSkill: (id: string) => void;
   centerTab: string;
   setCenterTab: (t: string) => void;
@@ -279,10 +244,14 @@ export interface AppStore {
   setLeftTab: (t: string) => void;
   rightTab: string;
   setRightTab: (t: string) => void;
+  version: number;
+  setVersion: (v: number) => void;
   projectRoot: string | null;
   setProjectRoot: (r: string | null) => void;
   customTheme: ThemeConfig;
   setCustomTheme: (t: Partial<ThemeConfig>) => void;
+  showHome: boolean;
+  setShowHome: (v: boolean) => void;
 }
 
 export const useStore = create<AppStore>((set, get) => ({
@@ -352,24 +321,12 @@ export const useStore = create<AppStore>((set, get) => ({
   uninstallExtension: (id) => set((state) => ({
     extensions: state.extensions.map((e) => e.id === id ? { ...e, installed: false } : e),
   })),
-  swarmAgents: defaultSwarmAgents,
-  setSwarmAgents: (swarmAgents) => set({ swarmAgents }),
-  swarmJobs: [],
-  setSwarmJobs: (swarmJobs) => set({ swarmJobs }),
-  addSwarmJob: (job: SwarmJob) => set((state) => {
-    const exists = state.swarmJobs.findIndex(j => j.id === job.id);
-    if (exists >= 0) {
-      const jobs = [...state.swarmJobs];
-      jobs[exists] = job;
-      return { swarmJobs: jobs };
-    }
-    return { swarmJobs: [job, ...state.swarmJobs] };
-  }),
-  skills: defaultSkills,
+  skills: [{ id: 'filesystem', name: 'Filesystem', description: 'Read, create, edit, and refactor files', icon: 'folder', category: 'Code', enabled: true }],
+  setSkills: (skills) => set({ skills }),
   toggleSkill: (id) => set((state) => ({
     skills: state.skills.map(s => s.id === id ? { ...s, enabled: !s.enabled } : s),
   })),
-  centerTab: 'HomeScreen',
+  centerTab: 'CodebaseSearch',
   setCenterTab: (centerTab) => set({ centerTab }),
   leftTab: 'files',
   setLeftTab: (leftTab) => set({ leftTab }),
@@ -386,4 +343,8 @@ export const useStore = create<AppStore>((set, get) => ({
     }
     return { customTheme: next };
   }),
+  showHome: true,
+  setShowHome: (showHome) => set({ showHome }),
+  version: 1.0,
+  setVersion: (v) => set({ version: v }),
 }));

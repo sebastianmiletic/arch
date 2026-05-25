@@ -48,3 +48,7 @@ screenshot-*.png
 *.png
 !frontend/src/assets/*.png
 !build/icon.icns
+
+# Compiled server
+dist/
+

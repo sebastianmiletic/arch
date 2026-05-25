@@ -1,112 +1,132 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useStore } from './stores/appStore';
 import LeftPanel from './components/left/LeftPanel';
 import CenterPanel from './components/center/CenterPanel';
 import RightPanel from './components/right/RightPanel';
-import { Settings, ShoppingBag } from 'lucide-react';
+import HomeScreen from './features/HomeScreen';
+import SplashScreen from './components/SplashScreen';
+import {
+  Settings, Puzzle, Home,
+  Search, Layers, Cpu, Zap, FlaskConical, GitBranch, Eye
+} from 'lucide-react';
 
-function ArchLogo({ size = 28, color = '#a855f7' }: { size?: number; color?: string }) {
-  const s = size;
-  const cx = s / 2;
-  const cy = s / 2;
-  const w = s * 0.55;
-  const h = s * 0.55;
+const iconMap: Record<string, any> = {
+  search: Search, layers: Layers, cpu: Cpu, zap: Zap,
+  'flask-conical': FlaskConical, 'git-branch': GitBranch,
+  puzzle: Puzzle, eye: Eye, settings: Settings, home: Home,
+};
 
-  // Diamond corners (flat top/bottom, pointed left/right)
-  const diamond = [
-    [cx - w, cy],
-    [cx, cy - h],
-    [cx + w, cy],
-    [cx, cy + h],
-  ];
-
-  const d = `M ${diamond[0][0]} ${diamond[0][1]} L ${diamond[1][0]} ${diamond[1][1]} L ${diamond[2][0]} ${diamond[2][1]} L ${diamond[3][0]} ${diamond[3][1]} Z`;
-
+function ArchLogo({ size = 28 }: { size?: number }) {
   return (
-    <svg width={s} height={s} viewBox={`0 0 ${s} ${s}`} xmlns="http://www.w3.org/2000/svg">
-      {/* Bottom layer — offset down, filled with accent */}
-      <path
-        d={d}
-        fill={color}
-        opacity={0.35}
-        transform={`translate(0, ${s * 0.18})`}
-      />
-      {/* Middle layer — filled dark with accent stroke */}
-      <path
-        d={d}
-        fill="#0a0a0f"
-        stroke={color}
-        strokeWidth={1.2}
-        transform={`translate(0, ${s * 0.09})`}
-      />
-      {/* Top layer — stroke only */}
-      <path
-        d={d}
-        fill="none"
-        stroke={color}
-        strokeWidth={1.8}
-      />
-      {/* Inner accent ring */}
-      <path
-        d={d}
-        fill="none"
-        stroke={color}
-        strokeWidth={0.7}
-        opacity={0.4}
-        transform={`scale(0.75) translate(${cx * 0.33}, ${cy * 0.33})`}
-      />
-    </svg>
+    <img
+      src="/logo.png"
+      width={size}
+      height={size}
+      alt="Arch"
+      className="shrink-0"
+      draggable={false}
+    />
   );
+}
+
+function VersionBadge() {
+  const version = useStore(s => s.version);
+  return <span className="text-text-dim">v{version.toFixed(2)}</span>;
 }
 
 export default function App() {
   const theme = useStore(s => s.theme);
   const applyThemeToDOM = useStore(s => s.applyThemeToDOM);
   const setCenterTab = useStore(s => s.setCenterTab);
+  const centerTab = useStore(s => s.centerTab);
+  const showHome = useStore(s => s.showHome);
+  const setShowHome = useStore(s => s.setShowHome);
+  const extensions = useStore(s => s.extensions);
+  const [showSplash, setShowSplash] = useState(true);
+  const [pinned, setPinned] = useState<string[]>(
+    (() => {
+      try { return JSON.parse(localStorage.getItem('arch_pinned_addons') || '[]'); }
+      catch { return []; }
+    })()
+  );
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      try {
+        const next = JSON.parse(localStorage.getItem('arch_pinned_addons') || '[]');
+        if (JSON.stringify(next) !== JSON.stringify(pinned)) setPinned(next);
+      } catch {}
+    }, 500);
+    return () => clearInterval(interval);
+  }, [pinned]);
 
   useEffect(() => {
     applyThemeToDOM(theme);
   }, [theme, applyThemeToDOM]);
 
+  const pinnedExts = pinned.map(id => extensions.find(e => e.id === id)).filter(Boolean) as typeof extensions;
+
+  if (showSplash) {
+    return <SplashScreen onComplete={() => setShowSplash(false)} />;
+  }
+
   return (
     <div className="h-screen w-screen flex flex-col overflow-hidden select-none">
-      {/* macOS traffic light safe area + header */}
       <header className="h-11 flex items-center pl-20 pr-4 border-b border-border shrink-0 bg-bg-panel draggable">
         <div className="flex items-center gap-2.5 no-drag">
-          <ArchLogo size={28} color={theme.accent} />
-          <div className="flex flex-col leading-none">
-            <span className="font-bold text-[13px] text-text-heading tracking-tight">Arch</span>
-            <span className="text-[9px] text-text-muted font-medium tracking-wider uppercase">Code Studio</span>
-          </div>
+          <ArchLogo size={28} />
+          <span className="font-bold text-[14px] text-text-heading tracking-tight">Arch</span>
         </div>
+
+        <div className="ml-4 flex items-center gap-1 no-drag">
+          {pinnedExts.map(ext => {
+            const Icon = iconMap[ext.icon] || Puzzle;
+            const isActive = centerTab === ext.component;
+            return (
+              <button
+                key={ext.id}
+                onClick={() => setCenterTab(ext.component)}
+                className={`flex items-center gap-1.5 px-2 py-1 text-[10px] font-semibold rounded-md transition-all ${
+                  isActive ? 'bg-accent text-bg' : 'text-text-secondary hover:text-text hover:bg-bg-hover'
+                }`}
+              >
+                <Icon size={11} />
+                {ext.name}
+              </button>
+            );
+          })}
+        </div>
+
         <div className="ml-auto flex items-center gap-3 text-[11px] text-text-muted no-drag">
           <span className="flex items-center gap-1.5">
             <span className="inline-block w-1.5 h-1.5 rounded-full bg-success animate-dot" />
             <span>Ready</span>
           </span>
           <span className="text-text-dim">|</span>
-          <button
-            onClick={() => setCenterTab('ExtensionStore')}
-            className="p-1.5 text-text-muted hover:text-accent hover:bg-accent-bg rounded-lg transition-colors"
-            title="Extension Store"
-          >
-            <ShoppingBag size={14} />
+          <button onClick={() => setShowHome(true)} className="p-1.5 text-text-muted hover:text-accent hover:bg-accent-bg rounded-lg transition-colors" title="Home">
+            <Home size={14} />
           </button>
-          <button
-            onClick={() => setCenterTab('SettingsPanel')}
-            className="p-1.5 text-text-muted hover:text-accent hover:bg-accent-bg rounded-lg transition-colors"
-            title="Settings"
-          >
+          <button onClick={() => setCenterTab('ExtensionStore')} className="p-1.5 text-text-muted hover:text-accent hover:bg-accent-bg rounded-lg transition-colors" title="Addon Library">
+            <Puzzle size={14} />
+          </button>
+          <button onClick={() => setCenterTab('SettingsPanel')} className="p-1.5 text-text-muted hover:text-accent hover:bg-accent-bg rounded-lg transition-colors" title="Settings">
             <Settings size={14} />
           </button>
-          <span className="text-text-dim">v1.0.0</span>
+          <VersionBadge />
         </div>
       </header>
-      <main className="flex-1 flex overflow-hidden">
-        <LeftPanel />
-        <CenterPanel />
-        <RightPanel />
-      </main>
+
+      {showHome ? (
+        <div className="flex-1 overflow-hidden">
+          <HomeScreen />
+        </div>
+      ) : (
+        <main className="flex-1 flex overflow-hidden">
+          <LeftPanel />
+          <CenterPanel />
+          <RightPanel />
+        </main>
+      )}
     </div>
   );
 }

@@ -23,8 +23,16 @@ app.get(/.*/, (_req, res) => {
   res.sendFile(path.join(publicDir, 'index.html'));
 });
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`API server on http://localhost:${PORT}`);
+});
+
+server.on('error', (err: any) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(`Port ${PORT} is already in use. Is another instance running?`);
+    process.exit(1);
+  }
+  console.error('Server error:', err);
 });
 
 seedFeatures();

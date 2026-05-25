@@ -1,38 +1,37 @@
 import { lazy, Suspense } from 'react';
 import { useStore } from '../../stores/appStore';
-import { Search, Layers, Cpu, TestTube, Sparkles, Users, Terminal } from 'lucide-react';
+import { Search, Layers, Cpu, TestTube, Puzzle, Eye } from 'lucide-react';
 
 // Lazy-load all center-panel feature components
-const HomeScreen = lazy(() => import('../../features/HomeScreen'));
 const CodebaseSearch = lazy(() => import('../../features/CodebaseSearch'));
 const ArchitectureViz = lazy(() => import('../../features/ArchitectureViz'));
 const ModelComparison = lazy(() => import('../../features/ModelComparison'));
 const TestingDashboard = lazy(() => import('../../features/TestingDashboard'));
-const SkillsPanel = lazy(() => import('../../features/SkillsPanel'));
 const SettingsPanel = lazy(() => import('../../features/SettingsPanel'));
-const SwarmPanel = lazy(() => import('../../features/SwarmPanel'));
+const SkillsPanel = lazy(() => import('../../features/SkillsPanel'));
 const ExtensionStore = lazy(() => import('../../features/ExtensionStore'));
+const UITester = lazy(() => import('../../features/UITester'));
 
 const iconMap: Record<string, any> = {
   'search': Search,
   'layers': Layers,
   'cpu': Cpu,
   'flask-conical': TestTube,
-  'zap': Sparkles,
-  'users': Users,
-  'terminal': Terminal,
+  'zap': Puzzle,
+  'git-branch': Puzzle,
+  'puzzle': Puzzle,
+  'eye': Eye,
 };
 
 const componentMap: Record<string, any> = {
-  HomeScreen: HomeScreen,
   CodebaseSearch: CodebaseSearch,
   ArchitectureViz: ArchitectureViz,
   ModelComparison: ModelComparison,
-  SkillsPanel: SkillsPanel,
   TestingDashboard: TestingDashboard,
   SettingsPanel: SettingsPanel,
-  SwarmPanel: SwarmPanel,
+  SkillsPanel: SkillsPanel,
   ExtensionStore: ExtensionStore,
+  UITester: UITester,
 };
 
 function Loader() {
@@ -48,9 +47,8 @@ export default function CenterPanel() {
   const setCenterTab = useStore(s => s.setCenterTab);
   const extensions = useStore(s => s.extensions);
 
-  // Only show main working extensions in the tab bar — NOT Settings, Store, or stubs
-  const mainTabIds = ['home', 'search', 'swarm', 'models', 'skills', 'tests', 'arch'];
-  const tabs = extensions.filter(e => e.installed && mainTabIds.includes(e.id));
+  // Show all installed extensions in the tab bar
+  const tabs = extensions.filter(e => e.installed);
 
   const ActiveComponent = componentMap[centerTab] || null;
 
@@ -58,7 +56,7 @@ export default function CenterPanel() {
     <div className="flex-1 min-w-0 flex flex-col bg-bg">
       <div className="flex items-center h-9 px-2 gap-0.5 border-b border-border bg-bg-panel shrink-0 overflow-x-auto">
         {tabs.map(t => {
-          const Icon = iconMap[t.icon] || Terminal;
+          const Icon = iconMap[t.icon] || Puzzle;
           return (
             <button
               key={t.id}

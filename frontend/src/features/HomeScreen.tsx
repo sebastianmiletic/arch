@@ -2,12 +2,25 @@ import { useState, useCallback, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
   FolderOpen, Folder, Zap, Layers,
-  Terminal, ArrowRight, Clock, Hash,
+  ArrowRight, Clock, Hash,
   AlertCircle, RefreshCw, Trash2, Search,
   BarChart3
 } from "lucide-react";
 import { useStore } from "../stores/appStore";
 import { projectApi } from "../services/api";
+
+function ArchLogo({ size = 22 }: { size?: number }) {
+  return (
+    <img
+      src="/logo.png"
+      width={size}
+      height={size}
+      alt="Arch"
+      className="shrink-0"
+      draggable={false}
+    />
+  );
+}
 
 export default function HomeScreen() {
   const theme = useStore((s: any) => s.theme);
@@ -16,6 +29,7 @@ export default function HomeScreen() {
   const setCenterTab = useStore((s: any) => s.setCenterTab);
   const setLeftTab = useStore((s: any) => s.setLeftTab);
   const extensions = useStore((s: any) => s.extensions);
+  const setShowHome = useStore((s: any) => s.setShowHome);
   const sessions = useStore((s: any) => s.sessions);
 
   const [stats, setStats] = useState<any>(null);
@@ -41,13 +55,22 @@ export default function HomeScreen() {
     try {
       const result = await (window as any).electron?.selectProject?.();
       if (result && !result.canceled && result.filePaths?.length > 0) {
-        const root = result.filePaths[0]; setProjectRoot(root); addRecentProject(root);
+        const root = result.filePaths[0];
+        setProjectRoot(root);
+        addRecentProject(root);
+        setShowHome(false);
+        setLeftTab("files");
       }
     } catch {
       const root = prompt("Enter project directory path:");
-      if (root) { setProjectRoot(root); addRecentProject(root); }
+      if (root) {
+        setProjectRoot(root);
+        addRecentProject(root);
+        setShowHome(false);
+        setLeftTab("files");
+      }
     }
-  }, [setProjectRoot]);
+  }, [setProjectRoot, setShowHome, setLeftTab]);
 
   const addRecentProject = (root: string) => {
     const name = root.split("/").pop() || root;
@@ -72,7 +95,7 @@ export default function HomeScreen() {
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
           <div className="flex items-center gap-3 mb-2">
             <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: theme.accentBg, border: `1px solid ${theme.borderStrong}` }}>
-              <Terminal size={22} style={{ color: theme.accent }} />
+              <ArchLogo size={28} />
             </div>
             <div>
               <h1 className="text-2xl font-bold text-text-heading tracking-tight">Arch</h1>
@@ -137,7 +160,7 @@ export default function HomeScreen() {
                   )}
 
                   <div className="flex gap-2 mt-2">
-                    <button onClick={() => setLeftTab("files")} className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-[11px] font-semibold bg-accent/10 text-accent rounded-lg hover:bg-accent/20 transition-colors border border-accent/20">
+                    <button onClick={() => { setLeftTab("files"); setShowHome(false); }} className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-[11px] font-semibold bg-accent/10 text-accent rounded-lg hover:bg-accent/20 transition-colors border border-accent/20">
                       <Folder size={12} /> Browse Files
                     </button>
                     <button onClick={() => setCenterTab("CodebaseSearch")} className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-[11px] font-semibold bg-bg border border-border text-text-secondary rounded-lg hover:bg-bg-hover transition-colors">
@@ -168,7 +191,7 @@ export default function HomeScreen() {
               ) : (
                 <div className="space-y-1">
                   {recentProjects.map((p) => (
-                    <div key={p.id} className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-bg-hover transition-colors group cursor-pointer" onClick={() => { setProjectRoot(p.path); setLeftTab("files"); }}>
+                    <div key={p.id} className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-bg-hover transition-colors group cursor-pointer" onClick={() => { setProjectRoot(p.path); setShowHome(false); setLeftTab("files"); }}>
                       <Folder size={14} className="text-text-muted shrink-0" />
                       <div className="flex-1 min-w-0">
                         <p className="text-[11px] font-medium text-text">{p.name}</p>
@@ -226,7 +249,7 @@ export default function HomeScreen() {
                 <span className="text-[12px] font-bold text-text-heading">Quick Start</span>
               </div>
               <div className="grid grid-cols-2 gap-2">
-                {["CodebaseSearch","SettingsPanel","SwarmPanel","ExtensionStore"].map((tab) => (
+                  {["CodebaseSearch","SettingsPanel","ExtensionStore","TestingDashboard"].map((tab) => (
                   <button key={tab} onClick={() => setCenterTab(tab)} className="flex items-center gap-2 p-2.5 rounded-xl bg-bg border border-border hover:bg-bg-hover hover:border-accent/20 transition-all text-left">
                     <Hash size={14} className="text-text-muted shrink-0" />
                     <span className="text-[11px] font-medium text-text">{tab.replace(/([A-Z])/g, " $1").trim()}</span>

@@ -139,12 +139,13 @@ function initTables() {
 
 function getDefaultModels(providerId: string): string[] {
   const map: Record<string, string[]> = {
-    ollama: ['llama3.2', 'llama3.1', 'mistral', 'codellama', 'qwen2.5'],
+    ollama: ['kimi-k2.6:cloud', 'glm-5.1:cloud', 'qwen3-coder:480b-cloud', 'deepseek-writer:latest'],
     openai: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo'],
     anthropic: ['claude-3-5-sonnet-20241022', 'claude-3-opus-20240229', 'claude-3-haiku-20240307'],
     gemini: ['gemini-1.5-pro', 'gemini-1.5-flash', 'gemini-1.0-pro'],
     openrouter: ['openai/gpt-4o', 'anthropic/claude-3.5-sonnet', 'meta-llama/llama-3.1-70b-instruct'],
     nvidia: ['meta/llama3-70b-instruct', 'meta/llama3-8b-instruct', 'mistralai/mixtral-8x7b-instruct-v0.1'],
+    opencode: ['ollama/kimi-k2.6:cloud', 'opencode/gpt-5', 'opencode/claude-sonnet-4', 'opencode/glm-5.1'],
     local: ['local-model', 'local-qwen', 'local-llama'],
   };
   return map[providerId] || ['default'];
@@ -152,12 +153,13 @@ function getDefaultModels(providerId: string): string[] {
 
 function seedProviders() {
   const providersSeed: Omit<ProviderConfig, 'models'>[] = [
-    { id: 'ollama', name: 'Ollama', enabled: true, baseUrl: 'http://localhost:11434', defaultModel: 'llama3.2', temperature: 0.7, maxTokens: 4096 },
+    { id: 'ollama', name: 'Ollama', enabled: true, baseUrl: 'http://127.0.0.1:11434/v1', defaultModel: 'kimi-k2.6:cloud', temperature: 0.7, maxTokens: 4096 },
     { id: 'openai', name: 'OpenAI', enabled: false, baseUrl: 'https://api.openai.com/v1', defaultModel: 'gpt-4o', temperature: 0.7, maxTokens: 8192 },
     { id: 'anthropic', name: 'Anthropic', enabled: false, baseUrl: 'https://api.anthropic.com', defaultModel: 'claude-3-5-sonnet-20241022', temperature: 0.7, maxTokens: 8192 },
     { id: 'gemini', name: 'Gemini', enabled: false, baseUrl: 'https://generativelanguage.googleapis.com', defaultModel: 'gemini-1.5-pro', temperature: 0.7, maxTokens: 8192 },
     { id: 'openrouter', name: 'OpenRouter', enabled: false, baseUrl: 'https://openrouter.ai/api/v1', defaultModel: 'openai/gpt-4o', temperature: 0.7, maxTokens: 8192 },
     { id: 'nvidia', name: 'NVIDIA NIM', enabled: false, baseUrl: 'https://integrate.api.nvidia.com/v1', defaultModel: 'meta/llama3-70b-instruct', temperature: 0.7, maxTokens: 4096 },
+    { id: 'opencode', name: 'OpenCode', enabled: false, baseUrl: '', defaultModel: 'ollama/kimi-k2.6:cloud', temperature: 0.7, maxTokens: 4096 },
     { id: 'local', name: 'Local Endpoint', enabled: false, baseUrl: 'http://localhost:8000/v1', defaultModel: 'local-model', temperature: 0.7, maxTokens: 4096 },
   ];
 

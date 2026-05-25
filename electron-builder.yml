@@ -1,4 +1,4 @@
-appId: com.arch.studio
+appId: com.arch.studio.v2
 productName: "Arch"
 copyright: "2026"
 directories:
@@ -6,22 +6,16 @@ directories:
   buildResources: "build"
 files:
   - "main.js"
-  - "electron/preload.js"
+  - "electron/*"
+  - "!node_modules"
 extraResources:
   - from: "server"
     to: "server"
     filter:
       - "dist/**/*"
       - "public/**/*"
-      - "public/*"
       - "package.json"
       - "node_modules/**/*"
-      - "**/*.html"
-  - from: "frontend"
-    to: "frontend"
-    filter:
-      - "dist/**/*"
-      - "package.json"
 mac:
   category: "public.app-category.developer-tools"
   target:
@@ -32,8 +26,6 @@ mac:
   hardenedRuntime: false
   gatekeeperAssess: false
   identity: null
-  mergeASARs: false
   icon: "build/icon.icns"
 dmg:
   sign: false
-asar: false
