@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { ProviderConfig, ChatSession, Message, CodeChange, LoopState, Feature, ErrorReport, ThemeId, ThemeConfig, Extension, AppSettings, FileNode } from '../types';
+import { extendedThemes } from './themeGallery';
 
 interface SkillItem {
   id: string;
@@ -10,7 +11,7 @@ interface SkillItem {
   enabled: boolean;
 }
 
-export const themes: Record<ThemeId, ThemeConfig> = {
+export const themes: Record<string, ThemeConfig> = {
   orion: {
     id: 'orion',
     name: 'Orion',
@@ -172,39 +173,72 @@ export const themes: Record<ThemeId, ThemeConfig> = {
     danger: '#ef4444',
     dangerBg: 'rgba(239,68,68,0.08)',
   },
+  ...extendedThemes,
 };
 
 const defaultExtensions: Extension[] = [
-  { id: 'search', name: 'Search', description: 'Search across all project files and content', category: 'core', installed: false, version: '1.0.0', author: 'Arch', icon: 'search', dependencies: [], component: 'CodebaseSearch' },
-  { id: 'models', name: 'Models', description: 'Compare responses from multiple AI providers side-by-side', category: 'model', installed: false, version: '1.0.0', author: 'Arch', icon: 'cpu', dependencies: [], component: 'ModelComparison' },
-  { id: 'tests', name: 'Tests', description: 'Run comprehensive tests across the entire codebase', category: 'tool', installed: true, version: '1.0.0', author: 'Arch', icon: 'flask-conical', dependencies: [], component: 'TestingDashboard' },
-  { id: 'arch', name: 'Arch', description: '2D dependency graph of the entire stack', category: 'visualization', installed: true, version: '1.0.0', author: 'Arch', icon: 'layers', dependencies: [], component: 'ArchitectureViz' },
-  { id: 'uitester', name: 'UI Tester', description: 'Preview your app, capture runtime errors, fix them with AI', category: 'tool', installed: true, version: '1.0.0', author: 'Arch', icon: 'eye', dependencies: [], component: 'UITester' },
-  // AVAILABLE IN ADDON LIBRARY (uninstalled by default)
-  { id: 'skills', name: 'Skills', description: 'Toggleable AI capabilities and tools', category: 'tool', installed: false, version: '1.0.0', author: 'Arch', icon: 'zap', dependencies: [], component: 'SkillsPanel' },
-  { id: 'github', name: 'GitHub', description: 'Browse repos, commits, and file trees', category: 'tool', installed: false, version: '1.0.0', author: 'Arch', icon: 'git-branch', dependencies: [], component: 'GitHubViewer' },
+  { id: 'search', name: 'Search', description: 'Search across all project files and content', category: 'core', version: '1.0.0', author: 'Arch', icon: 'search', dependencies: [], component: 'CodebaseSearch' },
+  { id: 'models', name: 'Models', description: 'Compare responses from multiple AI providers side-by-side', category: 'model', version: '1.0.0', author: 'Arch', icon: 'cpu', dependencies: [], component: 'ModelComparison' },
+  { id: 'tests', name: 'Tests', description: 'Run comprehensive tests across the entire codebase', category: 'tool', version: '1.0.0', author: 'Arch', icon: 'flask-conical', dependencies: [], component: 'TestingDashboard' },
+  { id: 'arch', name: 'Arch', description: '2D dependency graph of the entire stack', category: 'visualization', version: '1.0.0', author: 'Arch', icon: 'layers', dependencies: [], component: 'ArchitectureViz' },
+  { id: 'uitester', name: 'UI Tester', description: 'Preview your app, capture runtime errors, fix them with AI', category: 'tool', version: '1.0.0', author: 'Arch', icon: 'eye', dependencies: [], component: 'UITester' },
+  { id: 'skills', name: 'Skills', description: 'Toggleable AI capabilities and tools', category: 'tool', version: '1.0.0', author: 'Arch', icon: 'zap', dependencies: [], component: 'SkillsPanel' },
+  { id: 'github', name: 'GitHub', description: 'Browse repos, commits, and file trees', category: 'tool', version: '1.0.0', author: 'Arch', icon: 'git-branch', dependencies: [], component: 'GitHubViewer' },
 ];
 
-const defaultSettings: AppSettings = {
-  theme: 'orion',
-  fontSize: 'md',
-  fontFamily: 'sans',
-  animations: true,
-  autoSave: true,
-  sidebarWidth: 280,
-  chatWidth: 340,
-  minimizeToTray: false,
-  startupBehavior: 'welcome',
-  telemetry: false,
-  pinnedAddons: [],
-};
+function loadSettings(): AppSettings {
+  try {
+    const raw = localStorage.getItem('arch_settings');
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return {
+    theme: 'orion',
+    fontSize: 'md',
+    fontFamily: 'sans',
+    animations: true,
+    autoSave: true,
+    sidebarWidth: 280,
+    chatWidth: 340,
+    minimizeToTray: false,
+    startupBehavior: 'welcome',
+    telemetry: false,
+    pinnedAddons: ['search', 'tests', 'arch', 'uitester', 'github', 'skills', 'models'],
+    transparency: 1,
+  };
+}
+
+function loadCustomTheme(): ThemeConfig {
+  try {
+    const raw = localStorage.getItem('arch_custom_theme');
+    if (raw) return { ...themes.custom, ...JSON.parse(raw) };
+  } catch {}
+  return themes.custom;
+}
+
+function loadSessions(): ChatSession[] {
+  try {
+    const raw = localStorage.getItem('arch_sessions');
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return [];
+}
+
+function loadActiveSessionId(): string | null {
+  try { return localStorage.getItem('arch_active_session_id'); } catch {}
+  return null;
+}
+
+const defaultSettings = loadSettings();
+const initialCustomTheme = loadCustomTheme();
+const initialSessions = loadSessions();
+const initialActiveSessionId = loadActiveSessionId();
 
 export interface AppStore {
   theme: ThemeConfig;
   setTheme: (id: ThemeId) => void;
   settings: AppSettings;
   setSettings: (s: Partial<AppSettings>) => void;
-  applyThemeToDOM: (theme: ThemeConfig) => void;
+  applyThemeToDOM: (theme: ThemeConfig, transparency?: number) => void;
   providers: ProviderConfig[];
   setProviders: (p: ProviderConfig[]) => void;
   activeProviderId: string | null;
@@ -233,8 +267,7 @@ export interface AppStore {
   setFileTree: (t: FileNode | null) => void;
   extensions: Extension[];
   setExtensions: (e: Extension[]) => void;
-  installExtension: (id: string) => void;
-  uninstallExtension: (id: string) => void;
+  togglePinExtension: (id: string) => void;
   skills: SkillItem[];
   setSkills: (s: SkillItem[]) => void;
   toggleSkill: (id: string) => void;
@@ -245,7 +278,7 @@ export interface AppStore {
   rightTab: string;
   setRightTab: (t: string) => void;
   version: number;
-  setVersion: (v: number) => void;
+ setVersion: (v: number) => void;
   projectRoot: string | null;
   setProjectRoot: (r: string | null) => void;
   customTheme: ThemeConfig;
@@ -255,15 +288,22 @@ export interface AppStore {
 }
 
 export const useStore = create<AppStore>((set, get) => ({
-  theme: themes.orion,
+  theme: defaultSettings.theme === 'custom' ? initialCustomTheme : themes[defaultSettings.theme],
   setTheme: (id) => {
     const t = id === 'custom' ? get().customTheme : themes[id];
     set({ theme: t });
-    get().applyThemeToDOM(t);
+    get().applyThemeToDOM(t, get().settings.transparency);
+    get().setSettings({ theme: id });
   },
   settings: defaultSettings,
-  setSettings: (s) => set((state) => ({ settings: { ...state.settings, ...s } })),
-  applyThemeToDOM: (theme: ThemeConfig) => {
+  setSettings: (s) => {
+    set((state) => {
+      const next = { ...state.settings, ...s };
+      try { localStorage.setItem('arch_settings', JSON.stringify(next)); } catch {}
+      return { settings: next };
+    });
+  },
+  applyThemeToDOM: (theme: ThemeConfig, transparency = 1) => {
     const root = document.documentElement;
     root.style.setProperty('--color-bg', theme.bg);
     root.style.setProperty('--color-bg-panel', theme.bgPanel);
@@ -284,18 +324,27 @@ export const useStore = create<AppStore>((set, get) => ({
     root.style.setProperty('--color-warning', theme.warning);
     root.style.setProperty('--color-danger', theme.danger);
     root.style.setProperty('--color-danger-bg', theme.dangerBg);
+    root.style.setProperty('--app-opacity', String(transparency));
   },
   providers: [],
   setProviders: (providers) => set({ providers }),
   activeProviderId: null,
   setActiveProviderId: (activeProviderId) => set({ activeProviderId }),
-  sessions: [],
-  setSessions: (sessions) => set({ sessions }),
-  activeSessionId: null,
-  setActiveSessionId: (activeSessionId) => set({ activeSessionId }),
-  addMessage: (sessionId, msg) => set((state) => ({
-    sessions: state.sessions.map((s) => s.id === sessionId ? { ...s, messages: [...s.messages, msg], updatedAt: new Date().toISOString() } : s),
-  })),
+  sessions: initialSessions,
+  setSessions: (sessions) => {
+    try { localStorage.setItem('arch_sessions', JSON.stringify(sessions)); } catch {}
+    set({ sessions });
+  },
+  activeSessionId: initialActiveSessionId,
+  setActiveSessionId: (id) => {
+    try { if (id) localStorage.setItem('arch_active_session_id', id); else localStorage.removeItem('arch_active_session_id'); } catch {}
+    set({ activeSessionId: id });
+  },
+  addMessage: (sessionId, msg) => set((state) => {
+    const nextSessions = state.sessions.map((s) => s.id === sessionId ? { ...s, messages: [...s.messages, msg], updatedAt: new Date().toISOString() } : s);
+    try { localStorage.setItem('arch_sessions', JSON.stringify(nextSessions)); } catch {}
+    return { sessions: nextSessions };
+  }),
   changes: [],
   setChanges: (changes) => set({ changes }),
   addChangeItem: (change) => set((state) => ({ changes: [change, ...state.changes] })),
@@ -315,12 +364,13 @@ export const useStore = create<AppStore>((set, get) => ({
   setFileTree: (fileTree) => set({ fileTree }),
   extensions: defaultExtensions,
   setExtensions: (extensions) => set({ extensions }),
-  installExtension: (id) => set((state) => ({
-    extensions: state.extensions.map((e) => e.id === id ? { ...e, installed: true } : e),
-  })),
-  uninstallExtension: (id) => set((state) => ({
-    extensions: state.extensions.map((e) => e.id === id ? { ...e, installed: false } : e),
-  })),
+  togglePinExtension: (id) => set((state) => {
+    const pinned = new Set(state.settings.pinnedAddons || []);
+    if (pinned.has(id)) pinned.delete(id); else pinned.add(id);
+    const next = { ...state.settings, pinnedAddons: Array.from(pinned) };
+    try { localStorage.setItem('arch_settings', JSON.stringify(next)); } catch {}
+    return { settings: next };
+  }),
   skills: [{ id: 'filesystem', name: 'Filesystem', description: 'Read, create, edit, and refactor files', icon: 'folder', category: 'Code', enabled: true }],
   setSkills: (skills) => set({ skills }),
   toggleSkill: (id) => set((state) => ({
@@ -334,11 +384,12 @@ export const useStore = create<AppStore>((set, get) => ({
   setRightTab: (rightTab) => set({ rightTab }),
   projectRoot: null,
   setProjectRoot: (projectRoot) => set({ projectRoot }),
-  customTheme: themes.custom,
+  customTheme: initialCustomTheme,
   setCustomTheme: (updates) => set((state) => {
     const next = { ...state.customTheme, ...updates };
+    try { localStorage.setItem('arch_custom_theme', JSON.stringify(next)); } catch {}
     if (state.settings.theme === 'custom') {
-      state.applyThemeToDOM(next);
+      state.applyThemeToDOM(next, state.settings.transparency);
       return { customTheme: next, theme: next };
     }
     return { customTheme: next };

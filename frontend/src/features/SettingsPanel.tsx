@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useStore, themes } from '../stores/appStore';
-import { Palette, Type, Layout, Rocket, Minimize2, Radio, Save, RefreshCw, Download, Upload, Wand2, Undo } from 'lucide-react';
+import { Palette, Type, Layout, Rocket, Minimize2, Radio, Save, RefreshCw, Download, Upload, Wand2, Undo, Eye, Droplets } from 'lucide-react';
 import type { ThemeId, ThemeConfig, AppSettings } from '../types';
 
 export default function SettingsPanel() {
@@ -9,14 +9,14 @@ export default function SettingsPanel() {
   const setTheme = useStore(s => s.setTheme);
   const customTheme = useStore(s => s.customTheme);
   const setCustomTheme = useStore(s => s.setCustomTheme);
+  const [showAllThemes, setShowAllThemes] = useState(false);
+  const [jsonRaw, setJsonRaw] = useState('');
+  const [jsonError, setJsonError] = useState<string | null>(null);
 
   const update = (key: keyof AppSettings, value: any) => {
     setSettings({ [key]: value });
     if (key === 'theme') setTheme(value as ThemeId);
   };
-
-  const [jsonRaw, setJsonRaw] = useState('');
-  const [jsonError, setJsonError] = useState<string | null>(null);
 
   const exportCustom = () => {
     const payload = JSON.stringify(customTheme, null, 2);
@@ -49,6 +49,51 @@ export default function SettingsPanel() {
     { key: 'danger', label: 'Danger' },
   ];
 
+  const originalKeys = ['orion', 'midnight', 'solar', 'forest', 'ocean', 'cyber', 'custom'];
+  const originalThemes = originalKeys.map(k => themes[k as ThemeId]).filter(Boolean);
+
+  const ThemeSwatch = ({ t, isActive = false }: { t: ThemeConfig; isActive?: boolean }) => {
+    return (
+      <button
+        key={t.id}
+        onClick={() => update('theme', t.id as ThemeId)}
+        className={`relative p-3 rounded-xl border-2 transition-all duration-200 ${
+          isActive ? 'border-accent shadow-lg' : 'border-border hover:border-border-strong'
+        }`}
+        style={{ background: t.bg, borderColor: isActive ? t.accent : undefined }}
+      >
+        <div className="flex items-center gap-2 mb-2">
+          <div className="w-3 h-3 rounded-full" style={{ background: t.accent }} />
+          <div className="w-3 h-3 rounded-full" style={{ background: t.text }} />
+          <div className="w-3 h-3 rounded-full" style={{ background: t.bgSurface }} />
+        </div>
+        <span className="text-[11px] font-semibold text-text">{t.name}</span>
+        {isActive && <div className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full" style={{ background: t.accent }} />}
+      </button>
+    );
+  };
+
+  if (showAllThemes) {
+    return (
+      <div className="p-4 h-full overflow-y-auto">
+        <div className="flex items-center gap-3 mb-6">
+          <button onClick={() => setShowAllThemes(false)} className="p-1.5 rounded-lg hover:bg-bg-hover text-text-muted transition-colors">
+            <Undo size={16} />
+          </button>
+          <div>
+            <h2 className="font-bold text-sm text-text-heading">All Themes</h2>
+            <p className="text-[11px] text-text-muted">Pick from {Object.keys(themes).length} carefully curated themes</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
+          {Object.values(themes).map((t: any) => (
+            <ThemeSwatch key={t.id} t={t} isActive={settings.theme === t.id} />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-4 h-full overflow-y-auto">
       <div className="flex items-center gap-3 mb-6">
@@ -63,27 +108,17 @@ export default function SettingsPanel() {
 
       <Section icon={Palette} title="Theme" description="Choose your color scheme">
         <div className="grid grid-cols-3 gap-2">
-          {Object.values(themes).map((t: any) => (
-            <button
-              key={t.id}
-              onClick={() => update('theme', t.id)}
-              className={`relative p-3 rounded-xl border-2 transition-all duration-200 ${
-                settings.theme === t.id ? 'border-accent shadow-lg' : 'border-border hover:border-border-strong'
-              }`}
-              style={{ background: t.bg }}
-            >
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-3 h-3 rounded-full" style={{ background: t.accent }} />
-                <div className="w-3 h-3 rounded-full" style={{ background: t.text }} />
-                <div className="w-3 h-3 rounded-full" style={{ background: t.bgSurface }} />
-              </div>
-              <span className="text-[11px] font-semibold" style={{ color: t.text }}>{t.name}</span>
-              {settings.theme === t.id && <div className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-accent" />}
-            </button>
+          {originalThemes.map(t => (
+            <ThemeSwatch key={t.id} t={t} isActive={settings.theme === t.id} />
           ))}
         </div>
+        <button
+          onClick={() => setShowAllThemes(true)}
+          className="mt-3 flex items-center gap-1.5 text-[11px] font-semibold text-accent hover:text-accentDim transition-colors"
+        >
+          <Eye size={12} /> View All {Object.keys(themes).length} Themes
+        </button>
 
-        {/* Custom Theme Editor */}
         {settings.theme === 'custom' && (
           <div className="mt-4 p-4 rounded-xl border border-accent/20 bg-accent-bg/30 space-y-4">
             <div className="flex items-center gap-2 mb-1">
@@ -97,18 +132,14 @@ export default function SettingsPanel() {
                   <input
                     type="color"
                     value={(customTheme as any)[key]}
-                    onChange={e => {
-                      setCustomTheme({ [key]: e.target.value } as any);
-                    }}
+                    onChange={e => { setCustomTheme({ [key]: e.target.value } as any); }}
                     className="w-7 h-7 rounded cursor-pointer border-0 p-0 bg-transparent"
                   />
                   <div className="flex-1">
                     <div className="text-[10px] text-text-muted mb-0.5">{label}</div>
                     <input
                       value={(customTheme as any)[key]}
-                      onChange={e => {
-                        setCustomTheme({ [key]: e.target.value } as any);
-                      }}
+                      onChange={e => { setCustomTheme({ [key]: e.target.value } as any); }}
                       className="w-full bg-bg-surface border border-border rounded px-2 py-1 text-[10px] text-text font-mono focus:outline-none focus:border-accent"
                     />
                   </div>
@@ -117,32 +148,16 @@ export default function SettingsPanel() {
             </div>
 
             <div className="flex items-center gap-2">
-              <button
-                onClick={exportCustom}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-semibold bg-bg-surface border border-border rounded-lg hover:bg-bg-hover transition-colors"
+              <button onClick={exportCustom} className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-semibold bg-bg-surface border border-border rounded-lg hover:bg-bg-hover transition-colors"
               >
                 <Download size={12} /> Export JSON
               </button>
-              <button
-                onClick={() => {
-                  const input = prompt('Paste theme JSON:');
-                  if (input) {
-                    try {
-                      const parsed = JSON.parse(input);
-                      setCustomTheme(parsed);
-                      setJsonError(null);
-                    } catch {
-                      alert('Invalid JSON');
-                    }
-                  }
-                }}
+              <button onClick={() => { const input = prompt('Paste theme JSON:'); if (input) { try { const parsed = JSON.parse(input); setCustomTheme(parsed); setJsonError(null); } catch { alert('Invalid JSON'); } } }}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-semibold bg-bg-surface border border-border rounded-lg hover:bg-bg-hover transition-colors"
               >
                 <Upload size={12} /> Import JSON
               </button>
-              <button
-                onClick={() => setCustomTheme({ ...themes.orion })}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-semibold bg-bg-surface border border-border rounded-lg hover:bg-bg-hover transition-colors ml-auto"
+              <button onClick={() => setCustomTheme({ ...themes.orion })} className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-semibold bg-bg-surface border border-border rounded-lg hover:bg-bg-hover transition-colors ml-auto"
               >
                 <Undo size={12} /> Reset to Orion
               </button>
@@ -159,14 +174,11 @@ export default function SettingsPanel() {
               />
               {jsonError && <div className="text-[10px] text-danger mt-1">{jsonError}</div>}
               <div className="flex gap-2 mt-2">
-                <button
-                  onClick={importCustom}
-                  className="px-3 py-1.5 text-[10px] font-semibold bg-accent text-bg rounded-lg hover:opacity-90 transition-all"
+                <button onClick={importCustom} className="px-3 py-1.5 text-[10px] font-semibold bg-accent text-bg rounded-lg hover:opacity-90 transition-all"
                 >
                   Apply JSON
                 </button>
-                <button
-                  onClick={() => { setJsonRaw(JSON.stringify(customTheme, null, 2)); }}
+                <button onClick={() => { setJsonRaw(JSON.stringify(customTheme, null, 2)); }}
                   className="px-3 py-1.5 text-[10px] font-semibold bg-bg-surface border border-border text-text rounded-lg hover:bg-bg-hover transition-colors"
                 >
                   Load Current
@@ -175,6 +187,48 @@ export default function SettingsPanel() {
             </div>
           </div>
         )}
+      </Section>
+
+      <Section icon={Droplets} title="Transparency" description="Adjust app window opacity">
+        <div className="space-y-2">
+          <div className="flex items-center gap-3">
+            <span className="text-[11px] text-text-secondary w-16">Opacity</span>
+            <input
+              type="range"
+              min={0.3}
+              max={1}
+              step={0.01}
+              value={settings.transparency ?? 1}
+              onChange={e => update('transparency', parseFloat(e.target.value))}
+              className="flex-1 h-1 bg-bg-surface rounded-full appearance-none cursor-pointer"
+            />
+            <span className="text-[11px] text-text-muted w-12 text-right font-mono">{Math.round((settings.transparency ?? 1) * 100)}%</span>
+          </div>
+          <div className="flex gap-2">
+            {[
+              { label: 'Solid', value: 1 },
+              { label: '90%', value: 0.9 },
+              { label: '75%', value: 0.75 },
+              { label: '60%', value: 0.6 },
+              { label: '40%', value: 0.4 },
+            ].map(preset => (
+              <button
+                key={preset.value}
+                onClick={() => update('transparency', preset.value)}
+                className={`px-2 py-0.5 text-[10px] rounded-md border transition-colors ${
+                  Math.abs((settings.transparency ?? 1) - preset.value) < 0.02
+                    ? 'bg-accent text-bg border-accent'
+                    : 'border-border text-text-secondary hover:bg-bg-hover'
+                }`}
+              >
+                {preset.label}
+              </button>
+            ))}
+          </div>
+          <p className="text-[9px] text-text-muted">
+            Choose preset or drag slider. Lower opacity makes the window transparent.
+          </p>
+        </div>
       </Section>
 
       <Section icon={Type} title="Typography" description="Adjust text display">

@@ -1,8 +1,12 @@
 import { lazy, Suspense } from 'react';
 import { useStore } from '../../stores/appStore';
-import { Search, Layers, Cpu, TestTube, Puzzle, Eye } from 'lucide-react';
+import {
+  Search, Layers, Cpu, TestTube, Puzzle, Eye,
+  Zap, GitBranch, FlaskConical, Settings, ShoppingBag,
+  GitCompare, BarChart3, Bug, Shield, BookOpen, Globe, Package, Wrench,
+  ArrowUpRight, RotateCw, PanelsTopLeft, Download, ExternalLink
+} from 'lucide-react';
 
-// Lazy-load all center-panel feature components
 const CodebaseSearch = lazy(() => import('../../features/CodebaseSearch'));
 const ArchitectureViz = lazy(() => import('../../features/ArchitectureViz'));
 const ModelComparison = lazy(() => import('../../features/ModelComparison'));
@@ -11,16 +15,34 @@ const SettingsPanel = lazy(() => import('../../features/SettingsPanel'));
 const SkillsPanel = lazy(() => import('../../features/SkillsPanel'));
 const ExtensionStore = lazy(() => import('../../features/ExtensionStore'));
 const UITester = lazy(() => import('../../features/UITester'));
+const GitHubViewer = lazy(() => import('../../features/GitHubViewer'));
+const CodeViewer = lazy(() => import('../../features/CodeViewer'));
 
 const iconMap: Record<string, any> = {
   'search': Search,
   'layers': Layers,
   'cpu': Cpu,
-  'flask-conical': TestTube,
-  'zap': Puzzle,
-  'git-branch': Puzzle,
+  'flask-conical': FlaskConical,
+  'zap': Zap,
+  'git-branch': GitBranch,
   'puzzle': Puzzle,
   'eye': Eye,
+  'settings': Settings,
+  'shopping-bag': ShoppingBag,
+  'git-compare': GitCompare,
+  'bar-chart': BarChart3,
+  'bug': Bug,
+  'shield': Shield,
+  'book-open': BookOpen,
+  'globe': Globe,
+  'package': Package,
+  'wrench': Wrench,
+  'arrow': ArrowUpRight,
+  'rotate': RotateCw,
+  'panels': PanelsTopLeft,
+  'download': Download,
+  'external': ExternalLink,
+  'test': TestTube,
 };
 
 const componentMap: Record<string, any> = {
@@ -32,6 +54,8 @@ const componentMap: Record<string, any> = {
   SkillsPanel: SkillsPanel,
   ExtensionStore: ExtensionStore,
   UITester: UITester,
+  GitHubViewer: GitHubViewer,
+  CodeViewer: CodeViewer,
 };
 
 function Loader() {
@@ -46,9 +70,11 @@ export default function CenterPanel() {
   const centerTab = useStore(s => s.centerTab);
   const setCenterTab = useStore(s => s.setCenterTab);
   const extensions = useStore(s => s.extensions);
+  const settings = useStore(s => s.settings);
 
-  // Show all installed extensions in the tab bar
-  const tabs = extensions.filter(e => e.installed);
+  // Show pinned extensions in the tab bar
+  const pinnedIds = settings.pinnedAddons || [];
+  const tabs = pinnedIds.map(id => extensions.find(e => e.id === id)).filter(Boolean) as typeof extensions;
 
   const ActiveComponent = componentMap[centerTab] || null;
 

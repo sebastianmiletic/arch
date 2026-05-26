@@ -351,4 +351,100 @@ router.post('/skills/playwright', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+// ========== OpenCode CLI Integration ==========
+router.get('/opencode/models', async (_req, res) => {
+    try {
+        const { execFile } = await import('child_process');
+        const { promisify } = await import('util');
+        const execFileAsync = promisify(execFile);
+        const { stdout } = await execFileAsync('opencode', ['models'], { timeout: 10000, encoding: 'utf-8' });
+        const models = stdout.trim().split('\n').filter(Boolean);
+        res.json({ models });
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message || 'Failed to list models' });
+    }
+});
+router.get('/opencode/agents', async (_req, res) => {
+    try {
+        const { execFile } = await import('child_process');
+        const { promisify } = await import('util');
+        const execFileAsync = promisify(execFile);
+        const { stdout } = await execFileAsync('opencode', ['agent', 'list'], { timeout: 10000, encoding: 'utf-8' });
+        // Parse the text output: each agent name is on its own line before the permissions block
+        const lines = stdout.trim().split('\n').filter(Boolean);
+        const agents = [];
+        for (const line of lines) {
+            const trimmed = line.trim();
+            if (trimmed && !trimmed.startsWith('[') && !trimmed.startsWith('"') && !trimmed.startsWith('{')) {
+                const match = trimmed.match(/^(\S+)\s*(?:\((\S+)\))?/);
+                if (match) {
+                    agents.push({ name: match[1], primary: match[2] === 'primary' });
+                }
+            }
+        }
+        res.json({ agents });
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message || 'Failed to list agents' });
+    }
+});
+router.get('/opencode/sessions', async (_req, res) => {
+    try {
+        const { execFile } = await import('child_process');
+        const { promisify } = await import('util');
+        const execFileAsync = promisify(execFile);
+        const { stdout } = await execFileAsync('opencode', ['session', 'list', '--format', 'json'], { timeout: 10000, encoding: 'utf-8' });
+        const sessions = JSON.parse(stdout.trim());
+        res.json({ sessions });
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message || 'Failed to list sessions' });
+    }
+});
+router.post('/opencode/run', async (req, res) => {
+    const { prompt, model, agent, session, dir, continueSession } = req.body || {};
+    if (!prompt || typeof prompt !== 'string') {
+        return res.status(400).json({ error: 'Missing prompt' });
+    }
+    res.setHeader('Content-Type', 'application/x-ndjson');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    const args = ['run', '--format', 'json'];
+    if (model)
+        args.push('-m', model);
+    if (agent)
+        args.push('--agent', agent);
+    if (session)
+        args.push('-s', session);
+    if (dir)
+        args.push('--dir', dir);
+    if (continueSession)
+        args.push('-c');
+    const { spawn } = await import('child_process');
+    const child = spawn('opencode', args, {
+        env: process.env,
+        shell: false,
+        windowsHide: true,
+    });
+    child.stdin.write(prompt);
+    child.stdin.end();
+    let stderr = '';
+    child.stderr.on('data', (data) => { stderr += data.toString(); });
+    child.stdout.pipe(res);
+    child.on('close', (code) => {
+        if (code !== 0 && !res.writableEnded) {
+            res.write(JSON.stringify({ type: 'error', error: stderr || `OpenCode exited with code ${code}` }) + '\n');
+        }
+        if (!res.writableEnded)
+            res.end();
+    });
+    child.on('error', (err) => {
+        if (!res.writableEnded) {
+            res.write(JSON.stringify({ type: 'error', error: err.message }) + '\n');
+            res.end();
+        }
+    });
+    req.on('close', () => { child.kill(); });
+});
 //# sourceMappingURL=routes.js.map

@@ -1,13 +1,13 @@
-import { useState, useCallback, useEffect } from "react";
-import { motion } from "framer-motion";
+import { useState, useCallback, useEffect } from 'react';
+import { motion } from 'framer-motion';
 import {
   FolderOpen, Folder, Zap, Layers,
   ArrowRight, Clock, Hash,
   AlertCircle, RefreshCw, Trash2, Search,
   BarChart3
-} from "lucide-react";
-import { useStore } from "../stores/appStore";
-import { projectApi } from "../services/api";
+} from 'lucide-react';
+import { useStore } from '../stores/appStore';
+import { projectApi } from '../services/api';
 
 function ArchLogo({ size = 22 }: { size?: number }) {
   return (
@@ -87,7 +87,7 @@ export default function HomeScreen() {
   };
 
   const totalExts = extensions.length;
-  const installedExts = extensions.filter((e: any) => e.installed).length;
+  // all extensions are installed by default
 
   return (
     <div className="h-full w-full overflow-y-auto">
@@ -215,20 +215,20 @@ export default function HomeScreen() {
                 <span className="text-[12px] font-bold text-text-heading">Studio</span>
               </div>
               <div className="grid grid-cols-3 gap-3">
-                <StatCard label="Extensions" value={`${installedExts}/${totalExts}`} />
+                <StatCard label="Extensions" value={`${totalExts}`} />
                 <StatCard label="Chats" value={String(sessions?.length || 0)} />
                 <StatCard label="Providers" value="1" />
               </div>
             </motion.div>
 
-            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="rounded-2xl border border-border bg-bg-surface p-5">
+                <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="rounded-2xl border border-border bg-bg-surface p-5">
               <div className="flex items-center gap-2 mb-3">
                 <Layers size={16} className="text-accent" />
-                <span className="text-[12px] font-bold text-text-heading">Installed</span>
-                <button onClick={() => setCenterTab("ExtensionStore")} className="ml-auto text-[10px] text-accent hover:underline">Store...</button>
+                <span className="text-[12px] font-bold text-text-heading">Pinned</span>
+                <button onClick={() => setCenterTab("ExtensionStore")} className="ml-auto text-[10px] text-accent hover:underline">All...</button>
               </div>
               <div className="space-y-1">
-                {extensions.filter((e: any) => e.installed).map((e: any) => (
+                {extensions.map((e: any) => (
                   <button key={e.id} onClick={() => { if (e.component) setCenterTab(e.component); }} className="w-full flex items-center gap-2.5 p-2.5 rounded-xl hover:bg-bg-hover transition-colors text-left">
                     <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: theme.accentBg }}>
                       <Hash size={12} style={{ color: theme.accent }} />
@@ -248,14 +248,16 @@ export default function HomeScreen() {
                 <BarChart3 size={16} className="text-accent" />
                 <span className="text-[12px] font-bold text-text-heading">Quick Start</span>
               </div>
-              <div className="grid grid-cols-2 gap-2">
-                  {["CodebaseSearch","SettingsPanel","ExtensionStore","TestingDashboard"].map((tab) => (
-                  <button key={tab} onClick={() => setCenterTab(tab)} className="flex items-center gap-2 p-2.5 rounded-xl bg-bg border border-border hover:bg-bg-hover hover:border-accent/20 transition-all text-left">
-                    <Hash size={14} className="text-text-muted shrink-0" />
-                    <span className="text-[11px] font-medium text-text">{tab.replace(/([A-Z])/g, " $1").trim()}</span>
-                  </button>
-                ))}
-              </div>
+              <button
+                onClick={handleSelectDir}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-bg border border-border rounded-xl hover:bg-bg-hover hover:border-accent/30 transition-all text-left group"
+              >
+                <FolderOpen size={18} className="text-text-muted group-hover:text-accent transition-colors shrink-0" />
+                <div>
+                  <span className="text-[12px] font-semibold text-text">Select Project</span>
+                  <p className="text-[10px] text-text-muted mt-0.5">Open a workspace from disk</p>
+                </div>
+              </button>
             </motion.div>
           </div>
         </div>

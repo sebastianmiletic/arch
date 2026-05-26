@@ -77,6 +77,7 @@ function FileExplorer() {
   const setFileTree = useStore(s => s.setFileTree);
   const setSelectedFile = useStore(s => s.setSelectedFile);
   const setFileContent = useStore(s => s.setFileContent);
+  const setCenterTab = useStore(s => s.setCenterTab);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -103,6 +104,7 @@ function FileExplorer() {
   const handleFileClick = async (node: FileNode) => {
     if (node.type !== 'file') return;
     setSelectedFile(node.path);
+    setCenterTab('CodeViewer');
     try {
       const res = await fetch(`/api/files/content?path=${encodeURIComponent(node.path)}`);
       if (res.ok) {

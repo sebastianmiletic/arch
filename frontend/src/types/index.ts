@@ -1,6 +1,6 @@
 export interface Message {
   id: string;
-  role: 'user' | 'assistant' | 'system';
+  role: 'user' | 'assistant' | 'system' | 'error';
   content: string;
   timestamp: string;
   provider?: string;
@@ -120,7 +120,7 @@ export interface AgentAction {
   details?: string;
 }
 
-export type ThemeId = 'orion' | 'midnight' | 'solar' | 'forest' | 'ocean' | 'cyber' | 'custom';
+export type ThemeId = 'orion' | 'midnight' | 'solar' | 'forest' | 'ocean' | 'cyber' | 'custom' | 'rose' | 'amber' | 'emerald' | 'violet' | 'coral' | 'slate' | 'zinc' | 'stone' | 'nord' | 'dracula' | 'monokai' | 'gruvbox' | 'tokyo' | 'one_dark' | 'pastel' | 'paper' | 'coffee' | 'neon' | 'matrix' | 'cherry' | 'peach' | 'mint' | 'lavender' | 'gold' | 'ice' | 'rust' | 'teal' | 'bubblegum' | 'high_contrast' | 'warm' | 'cool' | 'sunset' | 'dawn' | 'sky';
 
 export interface ThemeConfig {
   id: ThemeId;
@@ -151,7 +151,6 @@ export interface Extension {
   name: string;
   description: string;
   category: 'core' | 'model' | 'agent' | 'tool' | 'visualization';
-  installed: boolean;
   version: string;
   author: string;
   icon: string;
@@ -218,4 +217,5 @@ export interface AppSettings {
   startupBehavior: 'welcome' | 'last_project';
   telemetry: boolean;
   pinnedAddons: string[];
+  transparency?: number;
 }

@@ -9,7 +9,7 @@ import {
   Plus, ChevronLeft, Minimize, Briefcase, Bug,
   BookOpen, Search, FileImage, Terminal, Globe,
   Flame, Hexagon, LayoutGrid, Diamond,
-  ChevronUp, Sliders
+  ChevronUp, Sliders, Pencil
 } from 'lucide-react';
 
 /* ═══════════════════════════════════════════════════
@@ -34,7 +34,7 @@ function getContextWindow(model: string): number {
   if (model.includes('deepseek') || model.includes('gemini-2.5')) return 256000;
   if (model.includes('kimi') || model.includes('qwen3')) return 200000;
   if (model.includes('llama') || model.includes('nemotron')) return 128000;
-  return 128000;  // default
+  return 128000;
 }
 
 /* ═══════════════════════════════════════════════════
@@ -63,13 +63,13 @@ const PROVIDER_TYPES = [
 ];
 
 /* ═══════════════════════════════════════════════════
-   SLASH COMMANDS  (Claude CLI inspired)
+   SLASH COMMANDS
    ═══════════════════════════════════════════════════ */
 interface SlashCmd { name: string; desc: string; icon: any; action: string; }
 const SLASH_COMMANDS: SlashCmd[] = [
-  { name: 'clear',   desc: 'Clear this conversation',                          icon: Trash2,      action: 'clear' },
-  { name: 'compact', desc: 'Summarize and shorten the conversation',             icon: Minimize,    action: 'compact' },
-  { name: 'connect', desc: 'Add or switch to a different provider',              icon: Plug,        action: 'connect' },
+  { name: 'clear',   desc: 'Clear this conversation',                          icon: Trash2,     action: 'clear' },
+  { name: 'compact', desc: 'Summarize and shorten the conversation',             icon: Minimize,   action: 'compact' },
+  { name: 'connect', desc: 'Add or switch to a different provider',              icon: Plug,       action: 'connect' },
   { name: 'cost',    desc: 'Show estimated cost for this conversation',         icon: Briefcase,   action: 'cost' },
   { name: 'debug',   desc: 'Show recent thinking / reasoning chain',            icon: Bug,         action: 'debug' },
   { name: 'doc',     desc: 'Load docs for a library (/doc react-router)',      icon: BookOpen,    action: 'doc' },
@@ -90,44 +90,27 @@ interface ChatMessage {
   content: string; timestamp: string; provider?: string;
 }
 interface ProviderSettings {
-  systemPrompt?: string;
-  temperature: number;
-  maxTokens: number;
-  contextWindow: number;
-  creativeBalance: number;
-  autoCompact: boolean;
+  systemPrompt?: string; temperature: number; maxTokens: number; contextWindow: number; creativeBalance: number; autoCompact: boolean;
 }
 interface NamedProvider {
   id: string; name: string; configId: string;
   apiKey?: string; baseUrl?: string; defaultModel: string;
-  enabled: boolean;
-  settings: ProviderSettings;
+  enabled: boolean; settings: ProviderSettings;
 }
 
 const DEFAULT_SETTINGS: ProviderSettings = {
-  systemPrompt: '',
-  temperature: 0.7,
-  maxTokens: 4096,
-  contextWindow: 128000,
-  creativeBalance: 50,
-  autoCompact: true,
+  systemPrompt: '', temperature: 0.7, maxTokens: 4096, contextWindow: 128000, creativeBalance: 50, autoCompact: true,
 };
 
-/* ═══════════════════════════════════════════════════
-   COMPONENT
-   ═══════════════════════════════════════════════════ */
 export default function ChatPanel() {
-  const version       = useStore(s => s.version as unknown as number);
-  const setVersion    = useStore(s => s.setVersion);
-  const projectRoot   = useStore(s => s.projectRoot);
-  const setProviders  = useStore(s => s.setProviders);
+  const version = useStore(s => s.version as unknown as number);
+  const setVersion = useStore(s => s.setVersion);
+  const projectRoot = useStore(s => s.projectRoot);
+  const setProviders = useStore(s => s.setProviders);
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
-  const [sessions, setSessions] = useState<any[]>([]);
-  const [activeSession, setActiveSession] = useState<any>(null);
-
   const [namedProviders, setNamedProviders] = useState<NamedProvider[]>(loadNamedProviders);
   const [connectOpen, setConnectOpen] = useState(false);
   const [connectStep, setConnectStep] = useState<0 | 1>(0);
@@ -138,6 +121,13 @@ export default function ChatPanel() {
   const [sessionOpen, setSessionOpen] = useState(false);
   const [slashOpen, setSlashOpen] = useState(false);
   const [selectedSlash, setSelectedSlash] = useState(0);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+
+  const storeSessions = useStore(s => s.sessions);
+  const setStoreSessions = useStore(s => s.setSessions);
+  const activeSessionId = useStore(s => s.activeSessionId);
+  const setActiveSessionId = useStore(s => s.setActiveSessionId);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -145,40 +135,55 @@ export default function ChatPanel() {
   const lastPollCount = useRef(0);
 
   useEffect(() => { scrollRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages.length]);
+
   useEffect(() => {
-    fetch('/api/sessions').then(r => r.json()).then(s => { setSessions(s); if (s[0]) setActiveSession(s[0]); });
+    if (storeSessions.length === 0) {
+      fetch('/api/sessions').then(r => r.json()).then(s => setStoreSessions(s));
+    }
     providersApi.list().then(setProviders);
     inputRef.current?.focus();
   }, []);
 
+  useEffect(() => {
+    if (!activeSessionId) { setMessages([]); return; }
+    const sess = storeSessions.find(s => s.id === activeSessionId);
+    if (sess) {
+      setMessages(sess.messages.map(m => ({ ...m, timestamp: new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) })));
+    }
+  }, [activeSessionId]);
+
   const activeNamed = namedProviders.find(p => p.enabled);
 
-  /* ─── token math ─── */
   const totalContent = messages.reduce((acc, m) => acc + m.content, '');
   const estimatedTokens = estimateTokens(totalContent);
   const contextWindow = getContextWindow(activeNamed?.defaultModel || '');
   const contextPct = Math.min(100, Math.round((estimatedTokens / contextWindow) * 100));
 
-  useEffect(() => {
-    if (activeNamed && activeNamed.settings.autoCompact && messages.length > 0 && contextPct >= 80) {
-      handleCompact();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [contextPct, messages.length]);
-
-  /* ─── messages ─── */
   const addMsg = (msg: Omit<ChatMessage, 'id' | 'timestamp'>) => {
-    setMessages(prev => [...prev, {
+    const newMsg: ChatMessage = {
       ...msg,
       id: Date.now().toString() + Math.random().toString(36).slice(2),
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    }]);
+    };
+    setMessages(prev => [...prev, newMsg]);
+    if (activeSessionId) {
+      const next = storeSessions.map(s => s.id === activeSessionId ? { ...s, messages: [...s.messages, { ...newMsg, timestamp: new Date().toISOString() } as typeof s.messages[0]], updatedAt: new Date().toISOString() } : s);
+      setStoreSessions(next);
+    }
   };
 
-  /* ─── slash command runner ─── */
+  const handleCompact = () => {
+    if (messages.length <= 3) { addMsg({ role: 'system', content: 'Not enough messages to compact.' }); return; }
+    addMsg({ role: 'system', content: '*Compacting conversation to reduce context usage...*' });
+    setMessages(prev => {
+      const first = prev[0];
+      const lastThree = prev.slice(-3);
+      return [first, { role: 'system', content: `*[Compacted: ${prev.length - 4} messages removed, ${estimatedTokens.toLocaleString()} tokens reduced]*`, id: 'compact', timestamp: '' }, ...lastThree];
+    });
+  };
+
   const runSlash = (cmd: SlashCmd, rest = '') => {
     setInput(''); setSlashOpen(false); setSelectedSlash(0);
-
     switch (cmd.action) {
       case 'clear': setMessages([]); addMsg({ role: 'system', content: 'Chat history cleared.' }); break;
       case 'compact': handleCompact(); break;
@@ -196,18 +201,6 @@ export default function ChatPanel() {
     inputRef.current?.focus();
   };
 
-  const handleCompact = () => {
-    if (messages.length <= 3) { addMsg({ role: 'system', content: 'Not enough messages to compact.' }); return; }
-    addMsg({ role: 'system', content: '*Compacting conversation to reduce context usage…*' });
-    // Simple compaction: keep first user msg, last 3 msgs
-    setMessages(prev => {
-      const first = prev[0];
-      const lastThree = prev.slice(-3);
-      return [first, { role: 'system', content: `*[Compacted: ${prev.length - 4} messages removed, ${estimatedTokens.toLocaleString()} tokens reduced]*`, id: 'compact', timestamp: '' }, ...lastThree];
-    });
-  };
-
-  /* ─── input events ─── */
   const onInputChange = (val: string) => {
     setInput(val);
     if (val.startsWith('/')) {
@@ -215,7 +208,6 @@ export default function ChatPanel() {
       setSlashQuery(q);
       setSlashOpen(true);
       setSelectedSlash(0);
-      // auto-run exact match when space is typed after command
       if (/^\/\w+\s/.test(val)) {
         const cmdName = val.slice(1).split(' ')[0];
         const cmd = SLASH_COMMANDS.find(c => c.name === cmdName);
@@ -230,43 +222,34 @@ export default function ChatPanel() {
   const slashMatches = slashQuery ? SLASH_COMMANDS.filter(c => c.name.startsWith(slashQuery)) : SLASH_COMMANDS;
 
   const onKeyDown = (e: React.KeyboardEvent) => {
-    // Space after /command = run it
     if (e.key === ' ') {
       const m = input.match(/^\/(\w+)/);
-      if (m) {
-        const cmd = SLASH_COMMANDS.find(c => c.name === m[1]);
-        if (cmd) { e.preventDefault(); runSlash(cmd); return; }
-      }
+      if (m) { const cmd = SLASH_COMMANDS.find(c => c.name === m[1]); if (cmd) { e.preventDefault(); runSlash(cmd); return; } }
     }
-    // Slash palette navigation
     if (slashOpen && slashMatches.length > 0) {
-      if (e.key === 'ArrowDown')      { e.preventDefault(); setSelectedSlash(p => (p + 1) % slashMatches.length); return; }
-      if (e.key === 'ArrowUp')        { e.preventDefault(); setSelectedSlash(p => (p - 1 + slashMatches.length) % slashMatches.length); return; }
-      if (e.key === 'Enter')           { e.preventDefault(); runSlash(slashMatches[selectedSlash]); return; }
-      if (e.key === 'Escape')          { setSlashOpen(false); setSelectedSlash(0); return; }
+      if (e.key === 'ArrowDown') { e.preventDefault(); setSelectedSlash(p => (p + 1) % slashMatches.length); return; }
+      if (e.key === 'ArrowUp') { e.preventDefault(); setSelectedSlash(p => (p - 1 + slashMatches.length) % slashMatches.length); return; }
+      if (e.key === 'Enter') { e.preventDefault(); runSlash(slashMatches[selectedSlash]); return; }
+      if (e.key === 'Escape') { setSlashOpen(false); setSelectedSlash(0); return; }
     }
     if (e.key === 'Enter' && !e.shiftKey) {
       if (slashOpen) { e.preventDefault(); runSlash(slashMatches[selectedSlash]); return; }
       e.preventDefault(); handleSend();
     }
     if (e.key === 'Escape') {
-      setSlashOpen(false); setConnectOpen(false); setModelsOpen(false); setSessionOpen(false);
+      setSlashOpen(false); setConnectOpen(false); setModelsOpen(false); setSessionOpen(false); setRenamingId(null);
     }
   };
 
-  /* ─── send message ─── */
   const handleSend = async () => {
     if (!input.trim() || sending) return;
     const text = input.trim();
-
-    // slash-command dispatch
     if (text.startsWith('/')) {
       const cmdName = text.slice(1).split(' ')[0];
       const cmd = SLASH_COMMANDS.find(c => c.name === cmdName);
       const rest = text.slice(1 + cmdName.length).trim();
       if (cmd) { runSlash(cmd, rest); setInput(''); return; }
     }
-
     setInput(''); addMsg({ role: 'user', content: text });
     if (!activeNamed) { addMsg({ role: 'system', content: 'No provider active. Type **/connect** to set up your API key.' }); return; }
 
@@ -280,7 +263,8 @@ export default function ChatPanel() {
         body: JSON.stringify({ name: text.slice(0, 30), providerId, model: activeNamed.defaultModel || 'default' }),
       });
       const session = await sessionRes.json();
-      setActiveSession(session); setSessions(prev => [session, ...prev]);
+      setActiveSessionId(session.id);
+      setStoreSessions([session, ...storeSessions]);
 
       const poll = async () => {
         try {
@@ -307,7 +291,6 @@ export default function ChatPanel() {
     }
   };
 
-  /* ─── provider management ─── */
   const enableNamed = async (np: NamedProvider) => {
     const updated = namedProviders.map(p => ({ ...p, enabled: p.id === np.id }));
     setNamedProviders(updated); saveNamedProviders(updated);
@@ -324,11 +307,12 @@ export default function ChatPanel() {
   };
   const deleteNamed = (id: string) => { const next = namedProviders.filter(p => p.id !== id); setNamedProviders(next); saveNamedProviders(next); };
   const saveNew = () => {
-    if (!newConfig.name.trim() || !newConfig.apiKey.trim() || !newConfig.defaultModel) return;
     const t = PROVIDER_TYPES.find(x => x.id === newConfig.configId);
+    const needsKey = newConfig.configId !== 'opencode' && newConfig.configId !== 'ollama';
+    if (!newConfig.name.trim() || (needsKey && !newConfig.apiKey.trim()) || !newConfig.defaultModel) return;
     const np: NamedProvider = {
       id: `named-${Date.now()}`, name: newConfig.name, configId: newConfig.configId,
-      apiKey: newConfig.saveKey ? newConfig.apiKey : undefined,
+      apiKey: needsKey ? (newConfig.saveKey ? newConfig.apiKey : undefined) : undefined,
       baseUrl: t?.defaultUrl, defaultModel: newConfig.defaultModel, enabled: true,
       settings: newSettings,
     };
@@ -345,13 +329,32 @@ export default function ChatPanel() {
     setModelsOpen(false);
   };
 
-  /* ═══════════════════════════════════════════════════
-     RENDER
-     ═══════════════════════════════════════════════════ */
+  const activeSession = storeSessions.find(s => s.id === activeSessionId);
+
+  const createNewSession = () => {
+    const id = Date.now().toString();
+    const newSession = { id, name: 'New Chat', messages: [] as any[], providerId: activeNamed?.configId || '', model: activeNamed?.defaultModel || '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+    setStoreSessions([newSession, ...storeSessions]);
+    setActiveSessionId(id);
+    setMessages([]);
+    setSessionOpen(false);
+  };
+
+  const deleteSession = (id: string) => {
+    const next = storeSessions.filter(s => s.id !== id);
+    setStoreSessions(next);
+    if (activeSessionId === id) { setActiveSessionId(null); setMessages([]); }
+  };
+
+  const renameSession = (id: string, newName: string) => {
+    const next = storeSessions.map(s => s.id === id ? { ...s, name: newName } : s);
+    setStoreSessions(next);
+    setRenamingId(null);
+  };
+
   return (
     <div className="flex flex-col h-full bg-bg text-text relative">
-
-      {/* ─── CONNECT OVERLAY ─── */}
+      
       <AnimatePresence>{connectOpen && (
         <motion.div key="connect" initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.15 }}
           className="absolute inset-x-2 top-3 bottom-20 z-50 rounded-2xl bg-bg-surface/95 backdrop-blur-md border border-border shadow-[0_0_40px_rgba(0,0,0,0.3)] overflow-hidden flex flex-col"
@@ -361,7 +364,6 @@ export default function ChatPanel() {
             <span className="text-[11px] font-bold">{connectStep === 0 ? 'Providers' : 'Add Connection'}</span>
             <button onClick={() => { setConnectOpen(false); setConnectStep(0); setShowSettings(false); }} className="ml-auto p-1 text-text-dim hover:text-text"><X size={12} /></button>
           </div>
-
           {connectStep === 0 && (
             <div className="flex-1 overflow-y-auto p-2.5 space-y-1">
               {PROVIDER_TYPES.map(t => {
@@ -376,8 +378,6 @@ export default function ChatPanel() {
                   </button>
                 );
               })}
-
-              {/* saved connections */}
               {namedProviders.length > 0 && <>
                 <p className="text-[9px] font-bold text-text-muted uppercase tracking-wider mt-3 pt-2 border-t border-border">Saved</p>
                 <div className="space-y-1 mt-1.5">{namedProviders.map(np => {
@@ -394,7 +394,6 @@ export default function ChatPanel() {
               </>}
             </div>
           )}
-
           {connectStep === 1 && (
             <div className="flex-1 overflow-y-auto p-3 space-y-3">
               {(() => {
@@ -406,7 +405,6 @@ export default function ChatPanel() {
                     <div className="flex items-center gap-2"><div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: m?.bg }} ><Icon size={14} style={{ color: m?.color }} /></div>
                       <div><p className="text-[12px] font-bold">{t?.name}</p><p className="text-[10px] text-text-dim">{m?.desc}</p></div>
                     </div>
-
                     <div><label className="text-[9px] font-bold text-text-muted mb-1 block">Name</label>
                       <input value={newConfig.name} placeholder="e.g. My OpenAI Key" onChange={e => setNewConfig(c => ({ ...c, name: e.target.value }))} className="w-full bg-bg-panel border border-border rounded-xl px-3 py-1.5 text-[11px] focus:outline-none focus:border-accent/50" />
                     </div>
@@ -420,52 +418,38 @@ export default function ChatPanel() {
                       </label>
                     </div>
                     <div><label className="text-[9px] font-bold text-text-muted mb-1 block">Model</label>
-                      <select value={newConfig.defaultModel} onChange={e => setNewConfig(c => ({ ...c, defaultModel: e.target.value }))} className="w-full bg-bg-panel border border-border rounded-xl px-3 py-2 text-[11px] text-text appearance-none focus:outline-none focus:border-accent/50"
-                      >
+                      <select value={newConfig.defaultModel} onChange={e => setNewConfig(c => ({ ...c, defaultModel: e.target.value }))} className="w-full bg-bg-panel border border-border rounded-xl px-3 py-2 text-[11px] text-text appearance-none focus:outline-none focus:border-accent/50">
                         <option value="" disabled>Choose model…</option>
                         {(t?.models || []).map(md => <option key={md} value={md}>{md}</option>)}
                       </select>
                     </div>
-
-                    {/* settings fold */}
                     <div className="border border-border rounded-xl bg-bg-panel overflow-hidden">
-                      <button onClick={() => setShowSettings(s => !s)} className="w-full flex items-center justify-between px-3 py-2 text-[10px] font-bold text-text-muted hover:text-text transition-colors"
-                      >
+                      <button onClick={() => setShowSettings(s => !s)} className="w-full flex items-center justify-between px-3 py-2 text-[10px] font-bold text-text-muted hover:text-text transition-colors">
                         <span className="flex items-center gap-1.5"><Sliders size={12} /> Settings</span>
                         {showSettings ? <ChevronDown size={10} /> : <ChevronUp size={10} />}
                       </button>
                       <AnimatePresence>
                         {showSettings && (
-                          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden"
-                          >
-                            <div className="p-3 space-y-3 border-t border-border"
-                              onClick={e => e.stopPropagation()}
-                            >
+                          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
+                            <div className="p-3 space-y-3 border-t border-border" onClick={e => e.stopPropagation()}>
                               <div><label className="text-[9px] font-bold text-text-muted mb-1 block">Temperature <span className="font-mono text-text-secondary">{newSettings.temperature}</span></label>
                                 <input type="range" min="0" max="1" step="0.01" value={newSettings.temperature} onChange={e => setNewSettings(s => ({ ...s, temperature: parseFloat(e.target.value) }))} className="w-full accent-accent h-1" />
                                 <div className="flex justify-between text-[9px] text-text-dim mt-1"><span>Precise</span><span>Creative</span></div>
                               </div>
-
                               <div><label className="text-[9px] font-bold text-text-muted mb-1 block">Max Context Window <span className="font-mono text-text-secondary">{(newSettings.contextWindow / 1000).toFixed(0)}k</span></label>
                                 <input type="range" min="32000" max="2000000" step="8000" value={newSettings.contextWindow} onChange={e => setNewSettings(s => ({ ...s, contextWindow: parseInt(e.target.value) }))} className="w-full accent-accent h-1" />
                               </div>
-
                               <div><label className="text-[9px] font-bold text-text-muted mb-1 block">Max Tokens <span className="font-mono text-text-secondary">{newSettings.maxTokens.toLocaleString()}</span></label>
                                 <input type="range" min="512" max="65536" step="512" value={newSettings.maxTokens} onChange={e => setNewSettings(s => ({ ...s, maxTokens: parseInt(e.target.value) }))} className="w-full accent-accent h-1" />
                               </div>
-
                               <div><label className="text-[9px] font-bold text-text-muted mb-1 block">Creative Balance <span className="font-mono text-text-secondary">{newSettings.creativeBalance}%</span></label>
                                 <input type="range" min="0" max="100" step="1" value={newSettings.creativeBalance} onChange={e => setNewSettings(s => ({ ...s, creativeBalance: parseInt(e.target.value) }))} className="w-full accent-accent h-1" />
                               </div>
-
                               <div><label className="text-[9px] font-bold text-text-muted mb-1 block">System Prompt</label>
                                 <textarea value={newSettings.systemPrompt} onChange={e => setNewSettings(s => ({ ...s, systemPrompt: e.target.value }))} rows={3} placeholder="Optional custom system prompt…" className="w-full bg-bg-panel border border-border rounded-lg px-3 py-2 text-[11px] focus:outline-none focus:border-accent/50 resize-none" />
                               </div>
-
-                              <label className="flex items-center gap-2 text-[10px] text-text-secondary cursor-pointer"
-                              >
-                                <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center transition-colors ${newSettings.autoCompact ? 'bg-accent border-accent' : 'border-text-dim/30'}`}
-                                >{newSettings.autoCompact && <Check size={8} className="text-bg" />}</div>
+                              <label className="flex items-center gap-2 text-[10px] text-text-secondary cursor-pointer">
+                                <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center transition-colors ${newSettings.autoCompact ? 'bg-accent border-accent' : 'border-text-dim/30'}`}>{newSettings.autoCompact && <Check size={8} className="text-bg" />}</div>
                                 <input type="checkbox" checked={newSettings.autoCompact} onChange={e => setNewSettings(s => ({ ...s, autoCompact: e.target.checked }))} className="hidden" />
                                 Auto-compact at 80% context
                               </label>
@@ -474,9 +458,7 @@ export default function ChatPanel() {
                         )}
                       </AnimatePresence>
                     </div>
-
-                    <button onClick={saveNew} disabled={!newConfig.name.trim() || !newConfig.apiKey.trim() || !newConfig.defaultModel} className="w-full py-2 bg-accent text-bg text-[11px] font-bold rounded-xl hover:opacity-90 disabled:opacity-20 transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-accent/10"
-                    >
+                    <button onClick={saveNew} disabled={(()=>{const needsKey=newConfig.configId!=='opencode'&&newConfig.configId!=='ollama';return!newConfig.name.trim()||(needsKey&&!newConfig.apiKey.trim())||!newConfig.defaultModel;})()} className="w-full py-2 bg-accent text-bg text-[11px] font-bold rounded-xl hover:opacity-90 disabled:opacity-20 transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-accent/10">
                       <Save size={12} /> Connect
                     </button>
                   </div>
@@ -487,7 +469,6 @@ export default function ChatPanel() {
         </motion.div>
       )}</AnimatePresence>
 
-      {/* ─── MODELS OVERLAY ─── */}
       <AnimatePresence>{modelsOpen && (
         <motion.div key="models" initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.15 }}
           className="absolute inset-x-2 top-3 bottom-20 z-50 rounded-2xl bg-bg-surface/95 backdrop-blur-md border border-border shadow-[0_0_40px_rgba(0,0,0,0.3)] overflow-hidden flex flex-col"
@@ -503,8 +484,7 @@ export default function ChatPanel() {
               return (
                 <div className="flex flex-wrap gap-1">
                   {(pt?.models || []).map(md => (
-                    <button key={md} onClick={() => setModel(md)} className={`px-2.5 py-1 text-[9px] rounded-lg border transition-all ${activeNamed.defaultModel === md ? 'bg-accent text-bg border-accent shadow-sm' : 'border-border bg-bg-panel text-text-secondary hover:bg-bg-hover'}`}
-                    >{md}</button>
+                    <button key={md} onClick={() => setModel(md)} className={`px-2.5 py-1 text-[9px] rounded-lg border transition-all ${activeNamed.defaultModel === md ? 'bg-accent text-bg border-accent shadow-sm' : 'border-border bg-bg-panel text-text-secondary hover:bg-bg-hover'}`}>{md}</button>
                   ))}
                 </div>
               );
@@ -517,69 +497,58 @@ export default function ChatPanel() {
       )}</AnimatePresence>
 
       {/* ═══════════════════════════════════════════════════
-         TOOLBAR
+         TOOLBAR - Full width session bar only
          ═══════════════════════════════════════════════════ */}
-      <div className="shrink-0 flex items-center gap-0.5 px-2.5 py-1.5 border-b border-border bg-bg-panel">
+      <div className="shrink-0 flex items-center gap-0.5 px-2.5 py-1.5 border-b border-border bg-bg-panel relative">
 
-        {/* session chooser */}
-        <div className="relative">
-          <button onClick={() => setSessionOpen(o => !o)} className="flex items-center gap-1.5 px-2 py-1 text-[10px] font-semibold text-text-secondary hover:text-text rounded-lg hover:bg-bg-hover transition-all"
-          >
+        {/* Session chooser - takes full width */}
+        <div className="flex-1 relative flex items-center gap-1 min-w-0">
+          <button onClick={() => setSessionOpen(o => !o)} className="flex items-center gap-1.5 flex-1 px-2 py-1 text-[10px] font-semibold text-text-secondary hover:text-text rounded-lg hover:bg-bg-hover transition-all min-w-0">
             <MessageSquare size={12} />
-            <span className="max-w-[60px] truncate">{activeSession?.name || 'New'}</span>
+            <span className="truncate">{activeSession?.name || 'New Chat'}</span>
             <ChevronDown size={10} className={sessionOpen ? 'rotate-180' : ''} />
           </button>
-          {sessionOpen && (
-            <div className="absolute top-full left-0 mt-1 w-44 bg-bg-surface border border-border rounded-xl shadow-xl z-40 py-1"
-            >
-              {sessions.length === 0 && <div className="px-3 py-2 text-[10px] text-text-dim">No sessions</div>}
-              {sessions.map((s: any) => (
-                <button key={s.id} onClick={() => { setActiveSession(s); setSessionOpen(false); fetch(`/api/sessions/${s.id}/messages`).then(r => r.json()).then(msgs => setMessages(msgs.map((m: any) => ({ ...m, timestamp: '' })))); }}
-                  className={`w-full text-left px-3 py-1.5 text-[10px] flex items-center gap-2 hover:bg-bg-hover transition-colors ${activeSession?.id === s.id ? 'text-accent' : 'text-text'}`}
-                >
-                  <div className={`w-1.5 h-1.5 rounded-full ${activeSession?.id === s.id ? 'bg-accent' : 'bg-text-dim'}`} />
-                  <span className="truncate flex-1">{s.name || 'Untitled'}</span>
-                </button>
-              ))}
-              <div className="border-t border-border mt-1 pt-1 px-1"
-              >
-                <button onClick={() => { setActiveSession(null); setSessionOpen(false); setMessages([]); }} className="w-full text-left px-3 py-1 text-[10px] text-text-dim hover:text-text hover:bg-bg-hover rounded-lg transition-colors flex items-center gap-1"
-                ><Plus size={10} /> New</button>
-              </div>
-            </div>
-          )}
         </div>
 
-        <div className="w-px h-4 bg-border mx-0.5" />
+        {/* New chat */}
+        <button onClick={createNewSession} className="p-1.5 text-text-muted hover:text-accent hover:bg-accent-bg rounded-lg transition-colors shrink-0" title="New Chat">
+          <Plus size={13} />
+        </button>
 
-        {/* active model chip (clickable) */}
-        {activeNamed ? (
-          <button onClick={() => setModelsOpen(true)} className="group flex items-center gap-1.5 text-[9px] px-2 py-1 rounded-full bg-accent-bg border border-accent/20 text-accent hover:bg-accent/10 transition-all shrink-0"
-          >
-            <div className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse shrink-0" />
-            <span className="max-w-[80px] truncate font-medium">{activeNamed.defaultModel}</span>
-            <Cpu size={9} />
-          </button>
-        ) : (
-          <span className="text-[9px] text-text-dim/40 px-2 py-1">No AI</span>
-        )}
-
-        {/* context bar */}
-        <div className="flex items-center gap-1.5 shrink-0"
+        {/* Delete current chat */}
+        <button
+          onClick={() => { if (activeSessionId) deleteSession(activeSessionId); }}
+          disabled={!activeSessionId}
+          className="p-1.5 text-text-muted hover:text-danger hover:bg-danger-bg rounded-lg transition-colors shrink-0 disabled:opacity-20"
+          title="Delete this chat"
         >
-          <div className="w-20 h-1 rounded-full bg-bg-hover overflow-hidden"
-          >
-            <div className="h-full bg-accent transition-all duration-300" style={{ width: `${Math.min(contextPct, 100)}%`, backgroundColor: contextPct > 80 ? '#ef4444' : contextPct > 60 ? '#eab308' : '#a855f7' }} />
-          </div>
-          <span className={`text-[9px] font-mono tabular-nums ${contextPct > 80 ? 'text-danger' : contextPct > 60 ? 'text-warning' : 'text-text-dim'}`}
-          >{contextPct}%</span>
-          {contextPct >= 80 && (
-            <button onClick={handleCompact} className="p-1 rounded-md bg-warning/10 text-warning html-[9px] hover:bg-warning/20 transition-colors" title="Compact context"
-            ><Minimize size={10} /></button>
-          )}
-        </div>
+          <Trash2 size={13} />
+        </button>
 
-        <div className="ml-auto text-[9px] text-text-dim/40 font-mono">v{version.toFixed(2)}</div>
+        {sessionOpen && (
+          <div className="absolute top-[38px] left-2.5 right-2.5 bg-bg-surface border border-border rounded-xl shadow-xl z-40 py-1 max-h-60 overflow-y-auto"
+            onMouseLeave={() => setSessionOpen(false)}
+          >
+            {storeSessions.length === 0 && <div className="px-3 py-2 text-[10px] text-text-dim">No chats yet</div>}
+            {storeSessions.map((s: any) => (
+              <div key={s.id} className={`flex items-center gap-1 px-2 py-1.5 hover:bg-bg-hover transition-colors ${activeSessionId === s.id ? 'bg-accent-bg/20' : ''}`}>
+                <button onClick={() => { setActiveSessionId(s.id); setSessionOpen(false); }}
+                  className="flex-1 flex items-center gap-2 text-left text-[10px] min-w-0"
+                >
+                  <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${activeSessionId === s.id ? 'bg-accent' : 'bg-text-dim'}`} />
+                  <span className="truncate text-text">{s.name || 'Untitled'}</span>
+                </button>
+                {renamingId === s.id ? (
+                  <input autoFocus value={renameValue} onChange={e => setRenameValue(e.target.value)} onBlur={() => renameSession(s.id, renameValue)} onKeyDown={e => { if (e.key === 'Enter') renameSession(s.id, renameValue); if (e.key === 'Escape') setRenamingId(null); }}
+                    className="w-24 bg-bg-panel border border-border rounded px-1.5 py-0.5 text-[9px] text-text focus:outline-none focus:border-accent" />
+                ) : (
+                  <button onClick={(e) => { e.stopPropagation(); setRenamingId(s.id); setRenameValue(s.name || ''); }} className="p-0.5 text-text-dim hover:text-accent rounded"><Pencil size={10} /></button>
+                )}
+                <button onClick={(e) => { e.stopPropagation(); deleteSession(s.id); }} className="p-0.5 text-text-dim hover:text-danger rounded"><Trash2 size={10} /></button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* ═══════════════════════════════════════════════════
@@ -588,44 +557,33 @@ export default function ChatPanel() {
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
         <div className="flex-1 overflow-y-auto">
           {messages.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full gap-4 text-text-muted select-none"
-            >
-              <div className="w-14 h-14 rounded-2xl bg-accent-bg flex items-center justify-center"
-              ><Bot size={28} className="text-accent/40" /></div>
-              <div className="text-center space-y-1"
-              >
+            <div className="flex flex-col items-center justify-center h-full gap-4 text-text-muted select-none">
+              <div className="w-14 h-14 rounded-2xl bg-accent-bg flex items-center justify-center"><Bot size={28} className="text-accent/40" /></div>
+              <div className="text-center space-y-1">
                 <p className="text-text-secondary font-semibold text-[13px]">Start a conversation</p>
                 <p className="text-[11px] opacity-60">Press <kbd className="px-1.5 py-0.5 rounded bg-bg-hover text-text-secondary text-[10px] font-mono">/</kbd> for commands</p>
               </div>
             </div>
           ) : (
-            <div className="p-3 space-y-3"
-            >
+            <div className="p-3 space-y-3">
               {messages.map(msg => (
                 <motion.div key={msg.id} initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.15, ease: [0.22, 1, 0.36, 1] }}
                   className={`flex gap-2.5 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}
                 >
-                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${msg.role === 'user' ? 'bg-accent text-bg' : msg.role === 'assistant' ? 'bg-bg-surface border border-border' : 'bg-danger-bg border border-danger/30'}`}
-                  >
+                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${msg.role === 'user' ? 'bg-accent text-bg' : msg.role === 'assistant' ? 'bg-bg-surface border border-border' : 'bg-danger-bg border border-danger/30'}`}>
                     {msg.role === 'user' ? <User size={13} /> : msg.role === 'assistant' ? <Bot size={13} className="text-accent" /> : msg.role === 'error' ? <AlertCircle size={13} className="text-danger" /> : <Sparkles size={13} className="text-warning" />}
                   </div>
-                  <div className="flex flex-col gap-0.5 max-w-[82%]"
-                  >
-                    <div className={`rounded-2xl px-3.5 py-2.5 text-[12px] leading-relaxed ${msg.role === 'user' ? 'bg-accent text-bg rounded-tr-sm' : msg.role === 'assistant' ? 'bg-bg-surface border border-border text-text rounded-tl-sm' : 'bg-danger-bg/40 border border-danger/20 text-danger rounded-tl-sm'}`}
-                    >
+                  <div className="flex flex-col gap-0.5 max-w-[82%]">
+                    <div className={`rounded-2xl px-3.5 py-2.5 text-[12px] leading-relaxed ${msg.role === 'user' ? 'bg-accent text-bg rounded-tr-sm' : msg.role === 'assistant' ? 'bg-bg-surface border border-border text-text rounded-tl-sm' : 'bg-danger-bg/40 border border-danger/20 text-danger rounded-tl-sm'}`}>
                       <MessageContent content={msg.content} />
                     </div>
-                    {msg.provider && <div className="flex items-center gap-1 px-1"><Zap size={8} className="text-accent/60" /><span className="text-[9px] text-text-dim">{msg.provider} · {msg.timestamp}</span></div>}
+                    {msg.provider && <div className="flex items-center gap-1 px-1"><Zap size={8} className="text-accent/60" /><span className="text-[9px] text-text-dim">{msg.provider} &middot; {msg.timestamp}</span></div>}
                   </div>
                 </motion.div>
               ))}
               {sending && (
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center gap-2 pl-9"
-                >
-                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-bg-surface border border-border rounded-full"
-                  >{
-                    [0, 1, 2].map(i => <div key={i} className="w-1 h-1 rounded-full bg-accent animate-bounce" style={{ animationDelay: `${120 * i}ms` }} />)
-                  }</div>
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center gap-2 pl-9">
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-bg-surface border border-border rounded-full">{[0, 1, 2].map(i => <div key={i} className="w-1 h-1 rounded-full bg-accent animate-bounce" style={{ animationDelay: `${120 * i}ms` }} />)}</div>
                 </motion.div>
               )}
               <div ref={scrollRef} />
@@ -634,32 +592,25 @@ export default function ChatPanel() {
         </div>
 
         {/* ═══════════════════════════════════════════════════
-           INPUT
+           BOTTOM INFO: provider name, model, context window
            ═══════════════════════════════════════════════════ */}
-        <div className="shrink-0 border-t border-border bg-bg-panel/80 backdrop-blur-sm p-2.5">
-          <div className="relative"
-          >
-            {/* slash palette */}
+        <div className="shrink-0 border-t border-border bg-bg-panel/80 backdrop-blur-sm px-3 pt-2 pb-2.5">
+          {/* Prompt bar */}
+          <div className="relative">
             {slashOpen && (
-              <div className="absolute bottom-full left-0 right-0 mb-2 max-h-56 overflow-y-auto bg-bg-surface border border-border rounded-xl shadow-2xl overflow-hidden z-30"
-              >
+              <div className="absolute bottom-full left-0 right-0 mb-2 max-h-56 overflow-y-auto bg-bg-surface border border-border rounded-xl shadow-2xl overflow-hidden z-30">
                 {slashMatches.length === 0 ? (
-                  <div className="px-3 py-2 text-[11px] text-text-dim">No commands match `/`{slashQuery}</div>
+                  <div className="px-3 py-2 text-[11px] text-text-dim">No commands match &quot;{slashQuery}&quot;</div>
                 ) : (
-                  slashMatches.map((cmd, idx) => {
+                  slashMatches.map((cmd: any, idx: number) => {
                     const Icon = cmd.icon;
                     return (
                       <button key={cmd.name} onClick={() => runSlash(cmd)}
                         className={`w-full flex items-center gap-3 px-3 py-2 transition-colors text-left ${idx === selectedSlash ? 'bg-bg-hover' : ''}`}
                         onMouseDown={e => e.preventDefault()}
                       >
-                        <div className={`w-7 h-7 rounded-md flex items-center justify-center shrink-0 ${idx === selectedSlash ? 'bg-accent-bg' : 'bg-bg-hover'}`}
-                        ><Icon size={13} className={idx === selectedSlash ? 'text-accent' : 'text-text-dim'} /></div>
-                        <div className="flex-1 min-w-0"
-                        >
-                          <p className="text-[11px] font-semibold">/{cmd.name}</p>
-                          <p className="text-[10px] text-text-dim truncate">{cmd.desc}</p>
-                        </div>
+                        <div className={`w-7 h-7 rounded-md flex items-center justify-center shrink-0 ${idx === selectedSlash ? 'bg-accent-bg' : 'bg-bg-hover'}`}><Icon size={13} className={idx === selectedSlash ? 'text-accent' : 'text-text-dim'} /></div>
+                        <div className="flex-1 min-w-0"><p className="text-[11px] font-semibold">/{cmd.name}</p><p className="text-[10px] text-text-dim truncate">{cmd.desc}</p></div>
                         {idx === selectedSlash && <div className="w-1.5 h-1.5 rounded-full bg-accent shrink-0" />}
                       </button>
                     );
@@ -667,30 +618,63 @@ export default function ChatPanel() {
                 )}
               </div>
             )}
-
-            <div className="flex gap-2 items-end bg-bg-surface border border-border/80 rounded-2xl px-3 py-2.5 focus-within:border-accent/60 focus-within:shadow-[0_0_0_3px_rgba(168,85,247,0.08)] transition-all"
-            >
-              <div className="shrink-0 pt-2"
-              ><Command size={11} className="text-text-dim/40" /></div>
+            <div className="flex gap-2 items-end bg-bg-surface border border-border/80 rounded-2xl px-3 py-2.5 focus-within:border-accent/60 focus-within:shadow-[0_0_0_3px_rgba(168,85,247,0.08)] transition-all">
+              <div className="shrink-0 pt-2"><Command size={11} className="text-text-dim/40" /></div>
               <input ref={inputRef} value={input} onChange={e => onInputChange(e.target.value)} onKeyDown={onKeyDown}
-                placeholder={activeNamed ? `Ask ${activeNamed.name}…` : "Ask anything or press / for commands…"}
+                placeholder={activeNamed ? `Ask ${activeNamed.name}...` : "Ask anything or press / for commands..."}
                 className="flex-1 bg-transparent text-[12px] text-text placeholder:text-text-dim/70 focus:outline-none leading-relaxed py-0.5"
-                spellCheck={false} autoComplete="off"
-              />
-              <button onClick={handleSend} disabled={sending || !input.trim()} className="p-2 bg-accent text-bg rounded-xl hover:opacity-90 disabled:opacity-15 transition-all shrink-0"
-              >
+                spellCheck={false} autoComplete="off" />
+              <button onClick={handleSend} disabled={sending || !input.trim()} className="p-2 bg-accent text-bg rounded-xl hover:opacity-90 disabled:opacity-15 transition-all shrink-0">
                 <Send size={13} />
               </button>
             </div>
           </div>
-          <div className="flex items-center justify-between mt-1.5 px-1"
-          >
-            <span className="text-[9px] text-text-dim/60"
-            >
-              {activeNamed ? `${activeNamed.name} · ${(estimatedTokens / 1000).toFixed(1)}k tokens` : 'No provider · /connect'}
-            </span>
-            <span className="text-[9px] text-text-dim/40"
-            >{input.length}</span>
+
+          {/* Provider, model, context info */}
+          <div className="flex items-center justify-between mt-2 px-1">
+            <div className="flex items-center gap-2">
+              {activeNamed ? (
+                <>
+                  {/* Provider name */}
+                  <div className="flex items-center gap-1 text-[9px]">
+                    {(() => {
+                      const meta = PROVIDER_META[activeNamed.configId];
+                      const Icon = meta?.icon || Server;
+                      return (
+                        <>
+                          <div className="w-4 h-4 rounded-sm flex items-center justify-center shrink-0" style={{ background: meta?.bg }}>
+                            <Icon size={9} style={{ color: meta?.color }} />
+                          </div>
+                          <span className="text-text-secondary font-semibold">{meta?.desc ? meta.desc.split(',')[0] : activeNamed.name}</span>
+                        </>
+                      );
+                    })()}
+                  </div>
+                  <span className="text-text-dim/30">|</span>
+                  {/* Model name */}
+                  <div className="flex items-center gap-1 text-[9px]" title={`${activeNamed.defaultModel}`}>
+                    <Cpu size={9} className="text-text-dim/60" />
+                    <span className="text-text-dim font-mono max-w-[120px] truncate">{activeNamed.defaultModel}</span>
+                  </div>
+                  <span className="text-text-dim/30">|</span>
+                  {/* Context window */}
+                  <div className="flex items-center gap-1 text-[9px]">
+                    <span className="text-text-dim font-mono">{(contextWindow / 1000).toFixed(0)}k ctx</span>
+                    {/* Context usage bar */}
+                    <div className="w-12 h-1 rounded-full bg-bg-hover overflow-hidden">
+                      <div className="h-full transition-all duration-300" style={{ width: `${Math.min(contextPct, 100)}%`, backgroundColor: contextPct > 80 ? '#ef4444' : contextPct > 60 ? '#eab308' : '#a855f7' }} />
+                    </div>
+                    <span className={`font-mono tabular-nums ${contextPct > 80 ? 'text-danger' : contextPct > 60 ? 'text-warning' : 'text-text-dim'}`}>{contextPct}%</span>
+                    {contextPct >= 80 && (
+                      <button onClick={handleCompact} className="p-0.5 rounded bg-warning/10 text-warning hover:bg-warning/20 transition-colors" title="Compact context"><Minimize size={8} /></button>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <span className="text-[9px] text-text-dim/60">No Provider · /connect</span>
+              )}
+            </div>
+            <span className="text-[9px] text-text-dim/40 font-mono">{input.length}/{estimatedTokens.toLocaleString()}</span>
           </div>
         </div>
       </div>
@@ -704,8 +688,7 @@ export default function ChatPanel() {
 function MessageContent({ content }: { content: string }) {
   const lines = content.split('\n');
   return (
-    <div className="space-y-0.5"
-    >
+    <div className="space-y-0.5">
       {lines.map((line, i) => {
         const bolded = line.replace(/\*\*(.+?)\*\*/g, '<strong class="font-semibold">$1</strong>');
         const coded = bolded.replace(/`(.+?)`/g, '<code class="px-1 py-0.5 rounded-md bg-bg-hover text-accent text-[11px] font-mono">$1</code>');

@@ -1,3 +1,6 @@
+import { execFile } from 'child_process';
+import { promisify } from 'util';
+const execFileAsync = promisify(execFile);
 const USER_AGENT = 'Arch-Code-Studio/1.0';
 // ─── Helper: build request based on provider type ───
 function buildRequest(provider, messages) {
@@ -8,7 +11,6 @@ function buildRequest(provider, messages) {
         case 'ollama': {
             if (!provider.baseUrl)
                 throw new Error('No base URL for Ollama');
-            // Support both native /api/chat and OpenAI-compatible /v1/chat/completions
             const isOpenAICompat = provider.baseUrl.endsWith('/v1');
             url = isOpenAICompat
                 ? `${provider.baseUrl}/chat/completions`
@@ -42,7 +44,6 @@ function buildRequest(provider, messages) {
             if (provider.apiKey)
                 headers['x-api-key'] = provider.apiKey;
             headers['anthropic-version'] = '2023-06-01';
-            // Anthropic uses system as top-level field, not in messages
             const systemMsg = messages.find(m => m.role === 'system');
             const chatMessages = messages
                 .filter(m => m.role !== 'system')
@@ -61,17 +62,14 @@ function buildRequest(provider, messages) {
         case 'gemini': {
             if (!provider.baseUrl)
                 throw new Error('No base URL for Gemini');
-            // Gemini uses API key as query param
             const key = provider.apiKey || '';
             url = `${provider.baseUrl}/v1beta/models/${provider.defaultModel}:generateContent?key=${key}`;
-            // Convert messages to Gemini contents format
             const contents = messages
                 .filter(m => m.role !== 'system')
                 .map(m => ({
                 role: m.role === 'user' ? 'user' : 'model',
                 parts: [{ text: m.content }],
             }));
-            // System instruction is separate
             const systemMsg = messages.find(m => m.role === 'system');
             const payload = { contents };
             if (systemMsg) {
@@ -133,11 +131,9 @@ function buildRequest(provider, messages) {
 function parseResponse(providerId, data, fallbackModel) {
     switch (providerId) {
         case 'ollama': {
-            // Native Ollama format
             if (data.message?.content) {
                 return { content: data.message.content, model: data.model || fallbackModel, tokens: data.eval_count };
             }
-            // OpenAI-compatible format (when using /v1 endpoints)
             if (data.choices?.[0]?.message?.content) {
                 return { content: data.choices[0].message.content, model: data.model || fallbackModel, tokens: data.usage?.total_tokens };
             }
@@ -163,8 +159,53 @@ function parseResponse(providerId, data, fallbackModel) {
     }
     return { content: JSON.stringify(data), model: fallbackModel };
 }
+// ─── OpenCode via CLI ───
+import { spawn } from 'child_process';
+async function chatOpencode(messages) {
+    try {
+        const prompt = messages.map(m => `${m.role}: ${m.content}`).join('\n');
+        const result = await new Promise((resolve, reject) => {
+            const child = spawn('opencode', ['run', '--format', 'json'], {
+                env: process.env,
+                shell: false,
+                windowsHide: true,
+            });
+            let stdout = '';
+            let stderr = '';
+            child.stdout.on('data', (data) => { stdout += data.toString(); });
+            child.stderr.on('data', (data) => { stderr += data.toString(); });
+            child.stdin.write(prompt);
+            child.stdin.end();
+            child.on('close', (code) => {
+                if (code !== 0)
+                    reject(new Error(`OpenCode exited ${code}: ${stderr || ''}`));
+                else
+                    resolve(stdout);
+            });
+            child.on('error', (err) => reject(err));
+            setTimeout(() => { child.kill(); reject(new Error('OpenCode timed out after 120s')); }, 120000);
+        });
+        const lines = result.split('\n').filter(Boolean);
+        let content = '';
+        for (const line of lines) {
+            try {
+                const obj = JSON.parse(line);
+                if (obj.type === 'text' && obj.part?.text)
+                    content += obj.part.text;
+            }
+            catch { /* ignore non-JSON */ }
+        }
+        return { content, model: 'opencode' };
+    }
+    catch (err) {
+        throw new Error(`OpenCode error: ${err.message || err}`);
+    }
+}
 // ─── Chat ───
 export async function chatWithProvider(provider, messages) {
+    if (provider.id === 'opencode') {
+        return chatOpencode(messages);
+    }
     const { url, headers, body } = buildRequest(provider, messages);
     const res = await fetch(url, { method: 'POST', headers, body, signal: AbortSignal.timeout(60000) });
     if (!res.ok) {
@@ -202,11 +243,9 @@ export async function listOllamaModels(baseUrl) {
 }
 // ─── List models for any provider ───
 export async function listProviderModels(provider) {
-    // Ollama
     if (provider.id === 'ollama' && provider.baseUrl) {
         return listOllamaModels(provider.baseUrl);
     }
-    // OpenRouter model list
     if (provider.id === 'openrouter' && provider.apiKey) {
         try {
             const res = await fetch(`${provider.baseUrl}/models`, {
@@ -222,7 +261,15 @@ export async function listProviderModels(provider) {
             return provider.models || [];
         }
     }
-    // For others, return the known models from config
+    if (provider.id === 'opencode') {
+        try {
+            const { stdout } = await execFileAsync('opencode', ['--version'], { timeout: 5000, encoding: 'utf-8' });
+            return stdout.trim() ? ['opencode'] : [];
+        }
+        catch {
+            return [];
+        }
+    }
     return provider.models || [];
 }
 // ─── Test provider connection ───
@@ -231,10 +278,14 @@ export async function testProvider(config) {
     try {
         let models;
         let useModel = config.defaultModel;
+        if (config.id === 'opencode') {
+            models = await listProviderModels(config);
+            return { ok: models.length > 0, latency: Date.now() - start, models, error: models.length ? undefined : 'OpenCode CLI not found' };
+        }
         if (config.id === 'ollama' && config.baseUrl) {
             models = await listOllamaModels(config.baseUrl);
             if (models.length > 0 && !models.includes(config.defaultModel)) {
-                useModel = models[0]; // fall back to first installed model
+                useModel = models[0];
             }
         }
         if (config.id === 'openrouter' && config.apiKey) {
