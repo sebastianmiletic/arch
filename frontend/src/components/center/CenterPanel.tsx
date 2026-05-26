@@ -1,10 +1,10 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { useStore } from '../../stores/appStore';
 import {
   Search, Layers, Cpu, TestTube, Puzzle, Eye,
   Zap, GitBranch, FlaskConical, Settings, ShoppingBag,
   GitCompare, BarChart3, Bug, Shield, BookOpen, Globe, Package, Wrench,
-  ArrowUpRight, RotateCw, PanelsTopLeft, Download, ExternalLink
+  ArrowUpRight, RotateCw, PanelsTopLeft, Download, ExternalLink, FileCode
 } from 'lucide-react';
 
 const CodebaseSearch = lazy(() => import('../../features/CodebaseSearch'));
@@ -17,6 +17,7 @@ const ExtensionStore = lazy(() => import('../../features/ExtensionStore'));
 const UITester = lazy(() => import('../../features/UITester'));
 const GitHubViewer = lazy(() => import('../../features/GitHubViewer'));
 const CodeViewer = lazy(() => import('../../features/CodeViewer'));
+const CodeView = lazy(() => import('../../features/CodeView'));
 
 const iconMap: Record<string, any> = {
   'search': Search,
@@ -43,6 +44,7 @@ const iconMap: Record<string, any> = {
   'download': Download,
   'external': ExternalLink,
   'test': TestTube,
+  'file-code': FileCode,
 };
 
 const componentMap: Record<string, any> = {
@@ -56,6 +58,7 @@ const componentMap: Record<string, any> = {
   UITester: UITester,
   GitHubViewer: GitHubViewer,
   CodeViewer: CodeViewer,
+  CodeView: CodeView,
 };
 
 function Loader() {
@@ -71,10 +74,18 @@ export default function CenterPanel() {
   const setCenterTab = useStore(s => s.setCenterTab);
   const extensions = useStore(s => s.extensions);
   const settings = useStore(s => s.settings);
+  const setSettings = useStore(s => s.setSettings);
 
-  // Show pinned extensions in the tab bar
-  const pinnedIds = settings.pinnedAddons || [];
+  // Show pinned extensions in the tab bar — deduplicate on first render
+  const rawPinnedIds = settings.pinnedAddons || [];
+  const pinnedIds = [...new Set(rawPinnedIds)]; // remove duplicates
   const tabs = pinnedIds.map(id => extensions.find(e => e.id === id)).filter(Boolean) as typeof extensions;
+
+  useEffect(() => {
+    if (rawPinnedIds.length !== pinnedIds.length) {
+      setSettings({ pinnedAddons: pinnedIds });
+    }
+  }, []); // only on mount
 
   const ActiveComponent = componentMap[centerTab] || null;
 

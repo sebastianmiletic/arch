@@ -27,6 +27,21 @@ function findNodeBinary() {
 
 const NODE_BIN = findNodeBinary();
 
+// Find OpenCode binary: check common paths, then fallback to PATH
+function findOpencodeBinary() {
+  const candidates = [
+    '/opt/homebrew/bin/opencode',
+    '/usr/local/bin/opencode',
+    path.join(os.homedir(), '.local/bin/opencode'),
+  ];
+  for (const c of candidates) {
+    if (fs.existsSync(c)) return c;
+  }
+  return 'opencode'; // fallback to PATH
+}
+
+const OPENCODE_BIN = findOpencodeBinary();
+
 // IPC: project directory selector
 ipcMain.handle('select-project', async () => {
   if (!win) return { canceled: true };
@@ -171,7 +186,7 @@ function startBackend() {
   backend = spawn(NODE_BIN, ['dist/server.js'], {
     cwd: serverDir,
     stdio: 'inherit',
-    env: { ...process.env, PATH: userPath, DB_PATH: path.join(dbDir, 'studio.db') },
+    env: { ...process.env, PATH: userPath, DB_PATH: path.join(dbDir, 'studio.db'), OPENCODE_BIN },
   });
 
   backend.on('error', (err) => log(`Backend spawn error: ${err.message}`));

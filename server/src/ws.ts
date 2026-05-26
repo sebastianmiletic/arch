@@ -72,6 +72,23 @@ export function createWSServer(startPort = 3001) {
           ws.send(JSON.stringify({ type: 'pong' }));
         }
 
+        // ─── App UI control ───
+        if (msg.type === 'app:switchPanel') {
+          broadcast({ type: 'app:switchPanel', panel: msg.panel });
+        }
+        if (msg.type === 'app:launchServer') {
+          broadcast({ type: 'app:launchServer', url: msg.url, port: msg.port });
+        }
+        if (msg.type === 'app:openUrlInTester') {
+          broadcast({ type: 'app:openUrlInTester', url: msg.url });
+        }
+        if (msg.type === 'app:previewProject') {
+          broadcast({ type: 'app:previewProject', command: msg.command, file: msg.file });
+        }
+        if (msg.type === 'app:action') {
+          broadcast({ type: 'app:action', action: msg.action });
+        }
+
         // ─── Terminal protocol ───
         if (msg.type === 'terminal:create') {
           const sessionId = msg.sessionId || clientId;

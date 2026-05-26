@@ -184,6 +184,7 @@ const defaultExtensions: Extension[] = [
   { id: 'uitester', name: 'UI Tester', description: 'Preview your app, capture runtime errors, fix them with AI', category: 'tool', version: '1.0.0', author: 'Arch', icon: 'eye', dependencies: [], component: 'UITester' },
   { id: 'skills', name: 'Skills', description: 'Toggleable AI capabilities and tools', category: 'tool', version: '1.0.0', author: 'Arch', icon: 'zap', dependencies: [], component: 'SkillsPanel' },
   { id: 'github', name: 'GitHub', description: 'Browse repos, commits, and file trees', category: 'tool', version: '1.0.0', author: 'Arch', icon: 'git-branch', dependencies: [], component: 'GitHubViewer' },
+  { id: 'codeview', name: 'CodeView', description: 'Real-time view of AI code edits and changes', category: 'tool', version: '1.0.0', author: 'Arch', icon: 'file-code', dependencies: [], component: 'CodeView' },
 ];
 
 function loadSettings(): AppSettings {
@@ -197,12 +198,13 @@ function loadSettings(): AppSettings {
     fontFamily: 'sans',
     animations: true,
     autoSave: true,
+    autoFollowAI: true,
     sidebarWidth: 280,
     chatWidth: 340,
     minimizeToTray: false,
     startupBehavior: 'welcome',
     telemetry: false,
-    pinnedAddons: ['search', 'tests', 'arch', 'uitester', 'github', 'skills', 'models'],
+    pinnedAddons: ['search', 'arch', 'codeview'],
     transparency: 1,
   };
 }
@@ -277,6 +279,8 @@ export interface AppStore {
   setLeftTab: (t: string) => void;
   rightTab: string;
   setRightTab: (t: string) => void;
+  codeViewOpen: boolean;
+  setCodeViewOpen: (v: boolean) => void;
   version: number;
  setVersion: (v: number) => void;
   projectRoot: string | null;
@@ -382,6 +386,8 @@ export const useStore = create<AppStore>((set, get) => ({
   setLeftTab: (leftTab) => set({ leftTab }),
   rightTab: 'chat',
   setRightTab: (rightTab) => set({ rightTab }),
+  codeViewOpen: false,
+  setCodeViewOpen: (codeViewOpen) => set({ codeViewOpen }),
   projectRoot: null,
   setProjectRoot: (projectRoot) => set({ projectRoot }),
   customTheme: initialCustomTheme,

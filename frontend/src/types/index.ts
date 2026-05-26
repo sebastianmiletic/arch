@@ -120,7 +120,7 @@ export interface AgentAction {
   details?: string;
 }
 
-export type ThemeId = 'orion' | 'midnight' | 'solar' | 'forest' | 'ocean' | 'cyber' | 'custom' | 'rose' | 'amber' | 'emerald' | 'violet' | 'coral' | 'slate' | 'zinc' | 'stone' | 'nord' | 'dracula' | 'monokai' | 'gruvbox' | 'tokyo' | 'one_dark' | 'pastel' | 'paper' | 'coffee' | 'neon' | 'matrix' | 'cherry' | 'peach' | 'mint' | 'lavender' | 'gold' | 'ice' | 'rust' | 'teal' | 'bubblegum' | 'high_contrast' | 'warm' | 'cool' | 'sunset' | 'dawn' | 'sky';
+export type ThemeId = 'orion' | 'midnight' | 'solar' | 'forest' | 'ocean' | 'cyber' | 'custom' | string;
 
 export interface ThemeConfig {
   id: ThemeId;
@@ -211,6 +211,7 @@ export interface AppSettings {
   fontFamily: 'sans' | 'mono';
   animations: boolean;
   autoSave: boolean;
+  autoFollowAI: boolean;
   sidebarWidth: number;
   chatWidth: number;
   minimizeToTray: boolean;

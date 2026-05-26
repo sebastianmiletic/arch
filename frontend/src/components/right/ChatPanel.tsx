@@ -8,8 +8,7 @@ import {
   MessageSquare, Command, HelpCircle, ChevronDown,
   Plus, ChevronLeft, Minimize, Briefcase, Bug,
   BookOpen, Search, FileImage, Terminal, Globe,
-  Flame, Hexagon, LayoutGrid, Diamond,
-  ChevronUp, Sliders, Pencil
+  Flame, Hexagon, LayoutGrid, Diamond, ChevronUp, Sliders, Pencil, Eye,
 } from 'lucide-react';
 
 /* ═══════════════════════════════════════════════════
@@ -78,6 +77,8 @@ const SLASH_COMMANDS: SlashCmd[] = [
   { name: 'ls',      desc: 'List files in the current project',                icon: Terminal,    action: 'ls' },
   { name: 'model',   desc: 'Switch the AI model for this chat',                icon: Cpu,         action: 'models' },
   { name: 'models',  desc: 'Show all models for active provider',               icon: LayoutGrid,  action: 'models' },
+  { name: 'uitester',desc: 'Open the UI Tester panel',                         icon: Eye,       action: 'uitester' },
+  { name: 'preview', desc: 'Preview the current project in UI Tester',            icon: Eye,       action: 'preview' },
   { name: 'search',  desc: 'Search the web (/search latest React hooks)',      icon: Search,      action: 'search' },
   { name: 'web',     desc: 'Fetch a URL and include as context',                 icon: Globe,       action: 'web' },
 ];
@@ -192,11 +193,37 @@ export default function ChatPanel() {
       case 'help':  addMsg({ role: 'system', content: SLASH_COMMANDS.map(c => `**/${c.name}** — ${c.desc}`).join('\n') }); break;
       case 'cost':  addMsg({ role: 'system', content: `Estimated tokens: **${estimatedTokens.toLocaleString()}** / **${contextWindow.toLocaleString()}**\nContext usage: **${contextPct}%**` }); break;
       case 'debug': addMsg({ role: 'system', content: '*Debug: last reasoning chain shown in console.*' }); break;
-      case 'ls':    addMsg({ role: 'system', content: `Project root: \`${projectRoot || '—'}\`` }); break;
-      case 'doc':   addMsg({ role: 'system', content: rest ? `*Loading docs for **${rest}**…*` : 'Usage: **/doc** <library>' }); break;
+       case 'ls':    addMsg({ role: 'system', content: `Project root: \`${projectRoot || '—'}\`` }); break;
+       case 'uitester': {
+         // User typed /uitester -> open the UI tester panel in the center tab
+         const store = useStore.getState();
+         store.setShowHome(false);
+         store.setCenterTab('UITester');
+         addMsg({ role: 'system', content: 'Opened the UI Tester panel.' });
+         break;
+       }
+       case 'doc':   addMsg({ role: 'system', content: rest ? `*Loading docs for **${rest}**…*` : 'Usage: **/doc** <library>' }); break;
       case 'web':   addMsg({ role: 'system', content: rest ? `*Fetching **${rest}**…*` : 'Usage: **/web** <url>' }); break;
       case 'search':addMsg({ role: 'system', content: rest ? `*Searching web for **${rest}**…*` : 'Usage: **/search** <query>' }); break;
-      case 'image': addMsg({ role: 'system', content: 'Image upload coming soon.' }); break;
+       case 'image': addMsg({ role: 'system', content: 'Image upload coming soon.' }); break;
+       case 'preview': {
+         const store = useStore.getState();
+         store.setShowHome(false);
+         store.setCenterTab('UITester');
+         if (projectRoot) {
+           fetch(`/api/project-stats?root=${encodeURIComponent(projectRoot)}`).then(r=>r.json()).then(d=>{
+             if (d?.devUrl) {
+               (window as any).__appTesterUrl = d.devUrl;
+               addMsg({ role: 'system', content: `Previewing at ${d.devUrl}` });
+             } else {
+               addMsg({ role: 'system', content: 'Project detected. Set a dev URL in Settings.' });
+             }
+           }).catch(()=>addMsg({ role: 'system', content: 'Could not detect preview URL. Set it in Settings.' }));
+         } else {
+           addMsg({ role: 'system', content: 'No project root set. Open a project first.' });
+         }
+         break;
+       }
     }
     inputRef.current?.focus();
   };

@@ -2,6 +2,7 @@ import { execFile } from 'child_process';
 import { promisify } from 'util';
 const execFileAsync = promisify(execFile);
 const USER_AGENT = 'Arch-Code-Studio/1.0';
+const OPENCODE_BIN = process.env.OPENCODE_BIN || 'opencode';
 // ─── Helper: build request based on provider type ───
 function buildRequest(provider, messages) {
     const headers = { 'Content-Type': 'application/json' };
@@ -165,7 +166,7 @@ async function chatOpencode(messages) {
     try {
         const prompt = messages.map(m => `${m.role}: ${m.content}`).join('\n');
         const result = await new Promise((resolve, reject) => {
-            const child = spawn('opencode', ['run', '--format', 'json'], {
+            const child = spawn(OPENCODE_BIN, ['run', '--format', 'json'], {
                 env: process.env,
                 shell: false,
                 windowsHide: true,
@@ -263,7 +264,7 @@ export async function listProviderModels(provider) {
     }
     if (provider.id === 'opencode') {
         try {
-            const { stdout } = await execFileAsync('opencode', ['--version'], { timeout: 5000, encoding: 'utf-8' });
+            const { stdout } = await execFileAsync(OPENCODE_BIN, ['--version'], { timeout: 5000, encoding: 'utf-8' });
             return stdout.trim() ? ['opencode'] : [];
         }
         catch {

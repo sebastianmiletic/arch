@@ -1,6 +1,9 @@
 // providers/opencode.ts — OpenCode CLI Provider Adapter
 // ---------------------------------------------------------------------------
 import { spawn } from 'child_process';
+
+const OPENCODE_BIN = process.env.OPENCODE_BIN || 'opencode';
+
 import {
   type AIProviderConfig,
   type AIChatRequest,
@@ -28,7 +31,7 @@ export class OpencodeProvider extends BaseAIProvider {
 
   private execOpencode(args: string[], input?: string): Promise<string> {
     return new Promise((resolve, reject) => {
-      const child = spawn('opencode', args, {
+      const child = spawn(OPENCODE_BIN, args, {
         env: { ...process.env },
         shell: false,
         windowsHide: true,
@@ -79,7 +82,7 @@ export class OpencodeProvider extends BaseAIProvider {
 
   async *stream(request: AIChatRequest): AsyncGenerator<AIStreamChunk> {
     const inputText = request.messages.map((m) => `${m.role}: ${m.content}`).join('\n');
-    const child = spawn('opencode', ['run', '--format', 'json'], {
+    const child = spawn(OPENCODE_BIN, ['run', '--format', 'json'], {
       env: { ...process.env },
       shell: false,
       windowsHide: true,

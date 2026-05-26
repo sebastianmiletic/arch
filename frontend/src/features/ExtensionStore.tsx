@@ -3,7 +3,7 @@ import { useStore } from '../stores/appStore';
 import {
   Puzzle, Wrench, Eye, Cpu, ArrowLeft, X,
   Search, Layers, FlaskConical, Settings, ShoppingBag,
-  GitCompare, BarChart3, Bug, GitBranch, Shield, BookOpen, Globe, Package, Zap
+  GitCompare, BarChart3, Bug, GitBranch, Shield, BookOpen, Globe, Package, Zap, FileCode
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 
@@ -14,6 +14,7 @@ const iconMap: Record<string, any> = {
   'bar-chart': BarChart3, bug: Bug, 'git-branch': GitBranch,
   shield: Shield, 'book-open': BookOpen, globe: Globe,
   package: Package, wrench: Wrench, eye: Eye,
+  'file-code': FileCode,
 };
 
 export default function AddonLibrary() {

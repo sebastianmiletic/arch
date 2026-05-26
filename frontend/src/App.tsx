@@ -18,15 +18,97 @@ function VersionBadge() {
   return <span className="text-text-dim">v{version.toFixed(2)}</span>;
 }
 
+// ─── Panel switching map for AI tool actions ───
+const PANEL_MAP: Record<string, { centerTab?: string; leftTab?: string; rightTab?: string }> = {
+  uitester:     { centerTab: 'UITester' },
+  codeview:     { centerTab: 'CodeView' },
+  testing:      { centerTab: 'TestingDashboard' },
+  search:       { centerTab: 'CodebaseSearch' },
+  github:       { centerTab: 'GitHubViewer' },
+  arch:         { centerTab: 'ArchitectureViz' },
+  settings:     { centerTab: 'SettingsPanel' },
+  skills:       { centerTab: 'SkillsPanel' },
+  models:       { centerTab: 'ModelComparison' },
+  extensions:   { centerTab: 'ExtensionStore' },
+};
+
 export default function App() {
   const theme = useStore(s => s.theme);
   const applyThemeToDOM = useStore(s => s.applyThemeToDOM);
   const setCenterTab = useStore(s => s.setCenterTab);
-  const showHome = useStore(s => s.showHome);
   const setShowHome = useStore(s => s.setShowHome);
+  const showHome = useStore(s => s.showHome);
   const settings = useStore(s => s.settings);
   const [showSplash, setShowSplash] = useState(true);
   const transparency = settings.transparency ?? 1;
+
+  // ─── Listen for AI auto-action events via WebSocket ───
+  useEffect(() => {
+    const ws = new WebSocket('ws://localhost:3001');
+
+    ws.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data);
+
+        // Auto-switch panel when AI says so
+        if (msg.type === 'app:switchPanel' && msg.panel) {
+          const mapping = PANEL_MAP[msg.panel];
+          if (mapping?.centerTab) {
+            setShowHome(false);
+            setCenterTab(mapping.centerTab);
+          }
+        }
+
+        // Auto-open URL in UI tester
+        if (msg.type === 'app:openUrlInTester' && msg.url) {
+          setShowHome(false);
+          setCenterTab('UITester');
+          // Store the URL for UITester to pick up:
+          (window as any).__appTesterUrl = msg.url;
+        }
+
+        // Auto-preview project
+        if (msg.type === 'app:previewProject') {
+          setShowHome(false);
+          setCenterTab('UITester');
+          if (msg.command) {
+            (window as any).__appPreviewCommand = msg.command;
+          }
+          if (msg.file) {
+            (window as any).__appPreviewFile = msg.file;
+          }
+        }
+
+        // Auto-launch server
+        if (msg.type === 'app:launchServer') {
+          setShowHome(false);
+          setCenterTab('UITester');
+          (window as any).__appServerUrl = msg.url;
+        }
+
+        // Auto-open file when AI edits it (if autoFollowAI is on)
+        if (msg.type === 'change' && msg.data?.filePath) {
+          const follow = (window as any).__autoFollowAI ?? true;
+          if (follow) {
+            setShowHome(false);
+            setCenterTab('CodeViewer');
+            const st = useStore.getState();
+            st.setSelectedFile(msg.data.filePath);
+            st.setFileContent(msg.data.fileContent || msg.data.newContent || '');
+          }
+        }
+
+        // Generic action
+        if (msg.type === 'app:action' && msg.action) {
+          console.log('App action received:', msg.action);
+        }
+      } catch {
+        // ignore parse errors
+      }
+    };
+
+    return () => ws.close();
+  }, [setCenterTab, setShowHome]);
 
   useEffect(() => {
     applyThemeToDOM(theme, transparency);

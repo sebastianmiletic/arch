@@ -273,6 +273,7 @@ export default function SettingsPanel() {
 
       <Section icon={Rocket} title="Behavior" description="App behavior settings">
         <div className="space-y-2">
+          <ToggleSetting label="Auto-follow AI" description="Auto-open files the AI is editing" icon={RefreshCw} value={settings.autoFollowAI ?? true} onChange={(v: boolean) => update('autoFollowAI', v)} />
           <ToggleSetting label="Animations" description="Enable UI animations" icon={RefreshCw} value={settings.animations} onChange={(v: boolean) => update('animations', v)} />
           <ToggleSetting label="Auto-save" description="Automatically save session state" icon={Save} value={settings.autoSave} onChange={(v: boolean) => update('autoSave', v)} />
           <ToggleSetting label="Minimize to Tray" description="Keep running in background" icon={Minimize2} value={settings.minimizeToTray} onChange={(v: boolean) => update('minimizeToTray', v)} />

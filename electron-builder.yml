@@ -4,10 +4,11 @@ copyright: "2026"
 directories:
   output: "release"
   buildResources: "build"
+asar: false
 files:
   - "main.js"
-  - "electron/*"
-  - "!node_modules"
+  - "electron/**"
+  - "frontend/dist/**"
 extraResources:
   - from: "server"
     to: "server"
@@ -22,7 +23,6 @@ mac:
     - target: dir
       arch:
         - arm64
-        - x64
   hardenedRuntime: false
   gatekeeperAssess: false
   identity: null

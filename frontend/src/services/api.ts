@@ -98,6 +98,7 @@ export const opencodeApi = {
   models: () => api<{ models: string[] }>('/opencode/models'),
   agents: () => api<{ agents: { name: string; primary: boolean }[] }>('/opencode/agents'),
   sessions: () => api<{ sessions: any[] }>('/opencode/sessions'),
+  version: async () => ({ version: 'local' }), // fallback
   run: (data: { prompt: string; model?: string; agent?: string; session?: string; dir?: string; continueSession?: boolean }) => {
     return fetch(`${API}/opencode/run`, {
       method: 'POST',

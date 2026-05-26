@@ -32,7 +32,7 @@ export interface ChatSession {
 export interface CodeChange {
   id: string;
   filePath: string;
-  changeType: 'add' | 'remove' | 'modify';
+  changeType: 'add' | 'remove' | 'modify' | 'rename';
   lineStart: number;
   lineEnd: number;
   oldContent?: string;

@@ -6,6 +6,7 @@ import type { UITestLog } from '../types';
 
 export default function UITester() {
   // project root available via store
+  const projectRoot = useStore(s => s.projectRoot);
   const [url, setUrl] = useState('');
   const [isRunning, setIsRunning] = useState(false);
   const [logs, setLogs] = useState<UITestLog[]>([]);
@@ -14,6 +15,48 @@ export default function UITester() {
   const [consoleOpen, setConsoleOpen] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [frameKey, setFrameKey] = useState(0);
+
+  // ─── Check for AI-triggered preview actions ───
+  // Poll every 500ms so AI actions work even when UITester is already mounted
+  useEffect(() => {
+    const check = () => {
+      const g = window as any;
+      if (g.__appTesterUrl) {
+        setUrl(g.__appTesterUrl);
+        setLogs([]);
+        setIsRunning(true);
+        setFrameKey(k => k + 1);
+        setConsoleOpen(true);
+        delete g.__appTesterUrl;
+      }
+      if (g.__appPreviewFile && projectRoot) {
+        setUrl(`file://${projectRoot}/${g.__appPreviewFile}`);
+        setLogs([]);
+        setIsRunning(true);
+        setFrameKey(k => k + 1);
+        setConsoleOpen(true);
+        delete g.__appPreviewFile;
+      }
+      if (g.__appServerUrl) {
+        setUrl(g.__appServerUrl);
+        setLogs([]);
+        setIsRunning(true);
+        setFrameKey(k => k + 1);
+        setConsoleOpen(true);
+        delete g.__appServerUrl;
+      }
+      if (g.__appPreviewCommand) {
+        setUrl('');
+        setLogs([]);
+        setIsRunning(false);
+        setConsoleOpen(true);
+        delete g.__appPreviewCommand;
+      }
+    };
+    check();
+    const id = setInterval(check, 500);
+    return () => clearInterval(id);
+  }, [projectRoot]);
 
   const startPreview = useCallback(() => {
     if (!url.trim()) return;
